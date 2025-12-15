@@ -13,6 +13,7 @@ import Library from "@/pages/Library";
 import Settings from "@/pages/Settings";
 import ChangePassword from "@/pages/ChangePassword";
 import AdminUsers from "@/pages/AdminUsers";
+import SetupAdmin from "@/pages/SetupAdmin";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/setup-admin" element={<SetupAdmin />} />
             
             {/* Protected Routes */}
             <Route element={<MainLayout />}>
