@@ -41,7 +41,7 @@ serve(async (req) => {
       // Ensure role is admin
       await supabaseAdmin
         .from("user_roles")
-        .upsert({ user_id: existingUser.id, role: "admin" }, { onConflict: "user_id" });
+        .upsert({ user_id: existingUser.id, role: "admin" }, { onConflict: "user_id,role" });
 
       // Update profile
       await supabaseAdmin
@@ -71,7 +71,7 @@ serve(async (req) => {
       // Set role to admin
       await supabaseAdmin
         .from("user_roles")
-        .upsert({ user_id: newUser.user.id, role: "admin" }, { onConflict: "user_id" });
+        .upsert({ user_id: newUser.user.id, role: "admin" }, { onConflict: "user_id,role" });
 
       // Update profile
       await supabaseAdmin
