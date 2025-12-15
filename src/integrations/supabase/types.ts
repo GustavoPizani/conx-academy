@@ -14,16 +14,312 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      courses: {
+        Row: {
+          cover_image: string | null
+          created_at: string
+          description: string | null
+          id: string
+          published: boolean
+          target_roles: Database["public"]["Enums"]["app_role"][]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          cover_image?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          published?: boolean
+          target_roles?: Database["public"]["Enums"]["app_role"][]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          cover_image?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          published?: boolean
+          target_roles?: Database["public"]["Enums"]["app_role"][]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lessons: {
+        Row: {
+          course_id: string
+          created_at: string
+          duration: number
+          id: string
+          position: number
+          title: string
+          updated_at: string
+          video_url: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          duration?: number
+          id?: string
+          position?: number
+          title: string
+          updated_at?: string
+          video_url: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          duration?: number
+          id?: string
+          position?: number
+          title?: string
+          updated_at?: string
+          video_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          is_first_login: boolean
+          name: string
+          points: number
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          id: string
+          is_first_login?: boolean
+          name: string
+          points?: number
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          is_first_login?: boolean
+          name?: string
+          points?: number
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      progress: {
+        Row: {
+          id: string
+          is_completed: boolean
+          lesson_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          is_completed?: boolean
+          lesson_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          is_completed?: boolean
+          lesson_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_logs: {
+        Row: {
+          accessed_at: string
+          id: string
+          resource_id: string
+          user_id: string
+        }
+        Insert: {
+          accessed_at?: string
+          id?: string
+          resource_id: string
+          user_id: string
+        }
+        Update: {
+          accessed_at?: string
+          id?: string
+          resource_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_logs_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resources: {
+        Row: {
+          cover_image: string | null
+          created_at: string
+          id: string
+          title: string
+          type: Database["public"]["Enums"]["resource_type"]
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          cover_image?: string | null
+          created_at?: string
+          id?: string
+          title: string
+          type: Database["public"]["Enums"]["resource_type"]
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          cover_image?: string | null
+          created_at?: string
+          id?: string
+          title?: string
+          type?: Database["public"]["Enums"]["resource_type"]
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      team_hierarchy: {
+        Row: {
+          created_at: string
+          id: string
+          subordinate_id: string
+          supervisor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          subordinate_id: string
+          supervisor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          subordinate_id?: string
+          supervisor_id?: string
+        }
+        Relationships: []
+      }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_parent_team_id_fkey"
+            columns: ["parent_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin_or_coordinator: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "admin"
+        | "coordinator"
+        | "superintendent"
+        | "manager"
+        | "student"
+      resource_type: "book_pdf" | "podcast_audio"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +446,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "admin",
+        "coordinator",
+        "superintendent",
+        "manager",
+        "student",
+      ],
+      resource_type: ["book_pdf", "podcast_audio"],
+    },
   },
 } as const

@@ -12,6 +12,7 @@ import Courses from "@/pages/Courses";
 import Library from "@/pages/Library";
 import Settings from "@/pages/Settings";
 import ChangePassword from "@/pages/ChangePassword";
+import AdminUsers from "@/pages/AdminUsers";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/library" element={<Library />} />
               <Route path="/rankings" element={<Rankings />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
             </Route>
 
             {/* Redirects */}
