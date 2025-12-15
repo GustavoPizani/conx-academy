@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Bell, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { User, Lock, Bell, Eye, EyeOff, Loader2, Mail } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,18 +8,23 @@ import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { ROLE_LABELS } from '@/types/auth';
 
 const Settings: React.FC = () => {
-  const { user, updatePassword } = useAuth();
+  const { user, refreshProfile } = useAuth();
+  const { canEditOwnEmail } = useUserRole();
   const { toast } = useToast();
   
+  const [email, setEmail] = useState(user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingPassword, setIsLoadingPassword] = useState(false);
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   
   const [notifications, setNotifications] = useState({
     email: true,
@@ -49,19 +54,81 @@ const Settings: React.FC = () => {
       return;
     }
 
-    setIsLoading(true);
-    const success = await updatePassword(newPassword);
-    setIsLoading(false);
+    setIsLoadingPassword(true);
+    
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
 
-    if (success) {
+    setIsLoadingPassword(false);
+
+    if (error) {
       toast({
-        title: 'Senha alterada!',
-        description: 'Sua senha foi atualizada com sucesso.',
+        title: 'Erro',
+        description: error.message,
+        variant: 'destructive',
       });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      return;
     }
+
+    toast({
+      title: 'Senha alterada!',
+      description: 'Sua senha foi atualizada com sucesso.',
+    });
+    
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const handleEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!canEditOwnEmail()) {
+      toast({
+        title: 'Permissão negada',
+        description: 'Você não tem permissão para alterar o email.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!email.trim() || email === user?.email) {
+      return;
+    }
+
+    setIsLoadingEmail(true);
+
+    const { error } = await supabase.auth.updateUser({
+      email: email.trim(),
+    });
+
+    if (error) {
+      setIsLoadingEmail(false);
+      toast({
+        title: 'Erro',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Update profile email
+    if (user?.id) {
+      await supabase
+        .from('profiles')
+        .update({ email: email.trim() })
+        .eq('id', user.id);
+    }
+
+    setIsLoadingEmail(false);
+    
+    toast({
+      title: 'Email atualizado!',
+      description: 'Seu email foi alterado com sucesso.',
+    });
+
+    refreshProfile();
   };
 
   return (
@@ -85,11 +152,11 @@ const Settings: React.FC = () => {
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20 border-2 border-border">
                 <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">
-                  {user?.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  {user?.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || '?'}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="text-lg font-semibold text-foreground">{user?.name}</h3>
+                <h3 className="text-lg font-semibold text-foreground">{user?.name || 'Usuário'}</h3>
                 <p className="text-muted-foreground">{user?.email}</p>
                 <span className="inline-block mt-1 px-2 py-0.5 bg-primary/20 text-primary text-xs font-medium rounded">
                   {user?.role && ROLE_LABELS[user.role]}
@@ -106,9 +173,56 @@ const Settings: React.FC = () => {
               </div>
               <div>
                 <p className="text-muted-foreground">Pontos Totais</p>
-                <p className="font-medium text-primary">{user?.points.toLocaleString()}</p>
+                <p className="font-medium text-primary">{user?.points?.toLocaleString() || 0}</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Email Section (Admin Only) */}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="w-5 h-5 text-primary" />
+              Email
+            </CardTitle>
+            <CardDescription>
+              {canEditOwnEmail() 
+                ? 'Altere seu endereço de email.' 
+                : 'Apenas administradores podem alterar o email.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleEmailChange} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Endereço de Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-surface border-border"
+                  disabled={!canEditOwnEmail()}
+                />
+              </div>
+
+              {canEditOwnEmail() && (
+                <Button 
+                  type="submit" 
+                  variant="netflix" 
+                  disabled={isLoadingEmail || email === user?.email}
+                >
+                  {isLoadingEmail ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Atualizar Email'
+                  )}
+                </Button>
+              )}
+            </form>
           </CardContent>
         </Card>
 
@@ -168,8 +282,8 @@ const Settings: React.FC = () => {
                 />
               </div>
 
-              <Button type="submit" variant="netflix" disabled={isLoading}>
-                {isLoading ? (
+              <Button type="submit" variant="netflix" disabled={isLoadingPassword}>
+                {isLoadingPassword ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Salvando...

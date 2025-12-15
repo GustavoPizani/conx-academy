@@ -18,7 +18,16 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const result = await login(email, password);
+    if (!email.trim() || !password.trim()) {
+      toast({
+        title: 'Erro',
+        description: 'Por favor, preencha todos os campos.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const result = await login(email.trim(), password);
     
     if (result.success) {
       toast({
@@ -160,8 +169,7 @@ const Login: React.FC = () => {
           {/* Demo credentials hint */}
           <div className="mt-8 p-4 bg-surface rounded-lg border border-border">
             <p className="text-xs text-muted-foreground text-center">
-              <span className="font-semibold text-primary">Demo:</span> Use a senha{' '}
-              <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">Conx@2025</code>
+              <span className="font-semibold text-primary">Primeiro acesso?</span> Entre em contato com o administrador para receber suas credenciais.
             </p>
           </div>
         </div>
