@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import ReactPlayer from 'react-player';
-import screenfull from 'screenfull';
+import YouTube, { YouTubeProps } from 'react-youtube'; // <--- PLUGIN NATIVO DO YOUTUBE
 import { Play, CheckCircle, Lock, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { usePoints } from '@/hooks/usePoints';
 
 // Interfaces
 interface Lesson {
@@ -25,14 +25,23 @@ interface Course {
   title: string;
 }
 
+// Função auxiliar para extrair o ID do YouTube de qualquer link
+const getYouTubeID = (url: string) => {
+  if (!url) return '';
+  // Expressão regular para pegar ID de links normais, encurtados ou embed
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : '';
+};
+
 const CoursePlayer = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { awardLessonCompletion } = usePoints();
   
-  // Refs & States
-  const playerWrapperRef = useRef<HTMLDivElement>(null);
+  // States
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
@@ -40,6 +49,9 @@ const CoursePlayer = () => {
   const [videoError, setVideoError] = useState(false);
   const [canComplete, setCanComplete] = useState(false);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
+  
+  // Player Ref
+  const playerRef = useRef<any>(null);
 
   // 1. Fetch Data
   useEffect(() => {
@@ -59,12 +71,10 @@ const CoursePlayer = () => {
         return;
       }
 
-      // Ordenar aulas
       const sortedLessons = (courseData.lessons || []).sort((a: any, b: any) => a.position - b.position);
       setCourse(courseData);
       setLessons(sortedLessons);
 
-      // Buscar Progresso
       const { data: progressData } = await supabase
         .from('lesson_progress')
         .select('lesson_id')
@@ -84,8 +94,8 @@ const CoursePlayer = () => {
   const currentLesson = lessons[currentLessonIndex];
   const isLastLesson = currentLessonIndex === lessons.length - 1;
 
-  // Garante que a URL não tenha espaços extras que quebram o player
-  const cleanVideoUrl = currentLesson?.video_url?.trim() || "";
+  // Extrair o ID do vídeo atual
+  const videoId = currentLesson ? getYouTubeID(currentLesson.video_url) : '';
 
   const handleLessonChange = (index: number) => {
     setVideoError(false);
@@ -93,17 +103,30 @@ const CoursePlayer = () => {
     setCurrentLessonIndex(index);
   };
 
-  const handleVideoError = (e: any) => {
-    console.error("Erro CRÍTICO no Player:", e);
-    console.log("Tentando reproduzir URL:", cleanVideoUrl);
+  const onPlayerReady: YouTubeProps['onReady'] = (event) => {
+    playerRef.current = event.target;
+    // Tentar autoplay
+    event.target.playVideo();
+  };
+
+  const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
+    // Estado 0 = Ended (Terminou)
+    if (event.data === 0) {
+      setCanComplete(true);
+    }
+  };
+
+  const onPlayerError: YouTubeProps['onError'] = (event) => {
+    console.error("Erro no Player YouTube:", event);
     setVideoError(true);
   };
 
   const handleComplete = async () => {
     if (!currentLesson) return;
 
-    // Award points for completing the lesson
-    await awardLessonCompletion(courseId!, currentLesson.id);
+    if (awardLessonCompletion) {
+        await awardLessonCompletion(courseId!, currentLesson.id);
+    }
 
     const { error } = await supabase.from('lesson_progress').upsert({
       lesson_id: currentLesson.id,
@@ -121,15 +144,16 @@ const CoursePlayer = () => {
     }
   };
 
-  const handlePlay = () => {
-    // Mobile Fullscreen Logic
-    if (isMobile && screenfull.isEnabled && playerWrapperRef.current) {
-      try {
-        screenfull.request(playerWrapperRef.current);
-      } catch (err) {
-        console.warn("Fullscreen error:", err);
-      }
-    }
+  // Configurações do Player
+  const opts: YouTubeProps['opts'] = {
+    height: '100%',
+    width: '100%',
+    playerVars: {
+      autoplay: 1,
+      rel: 0,
+      modestbranding: 1,
+      iv_load_policy: 3,
+    },
   };
 
   // 3. Render
@@ -157,34 +181,26 @@ const CoursePlayer = () => {
         {/* PLAYER AREA */}
         <main className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden bg-black relative">
           
-          <div 
-            ref={playerWrapperRef} 
-            className="w-full aspect-video bg-zinc-900 relative flex items-center justify-center group"
-          >
-            {videoError ? (
+          <div className="w-full aspect-video bg-zinc-900 relative flex items-center justify-center group">
+            {videoError || !videoId ? (
               <div className="text-center p-6 bg-zinc-900 w-full h-full flex flex-col items-center justify-center">
                 <AlertCircle className="w-12 h-12 text-red-500 mb-2" />
                 <p className="text-white font-bold">Erro ao carregar vídeo</p>
-                <p className="text-zinc-400 text-sm mt-2">Verifique se o link está correto:</p>
+                <p className="text-zinc-400 text-sm mt-2">ID não encontrado ou link inválido.</p>
                 <code className="bg-black/50 p-2 rounded mt-2 text-xs text-yellow-500 break-all select-all">
-                  {cleanVideoUrl}
+                  {currentLesson.video_url}
                 </code>
               </div>
             ) : (
-              <ReactPlayer
-                url={cleanVideoUrl}
-                width="100%"
-                height="100%"
-                controls={true} // IMPORTANTE: Controles nativos sempre ativados para garantir play
-                // REMOVIDO: playing={false} -> Isso causava o bug!
-                onPlay={handlePlay}
-                onEnded={() => setCanComplete(true)}
-                onError={handleVideoError}
-                config={{
-                  youtube: { 
-                    playerVars: { showinfo: 0, rel: 0 } 
-                  }
-                }}
+              // COMPONENTE OFICIAL DO YOUTUBE
+              <YouTube
+                key={videoId} // Força recriar o player quando muda o vídeo (evita bugs)
+                videoId={videoId}
+                opts={opts}
+                onReady={onPlayerReady}
+                onStateChange={onPlayerStateChange}
+                onError={onPlayerError}
+                className="w-full h-full absolute inset-0"
               />
             )}
           </div>
