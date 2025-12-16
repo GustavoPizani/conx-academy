@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Clock, BookOpen, Plus, Loader2, MoreVertical, Heart } from 'lucide-react';
+import { Play, Clock, BookOpen, Plus, Loader2, MoreVertical, Heart, CheckCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -62,44 +62,67 @@ const Courses: React.FC = () => {
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
 
   const fetchCourses = async () => {
-    setIsLoading(true);
-    if (!user) return;
-    
-    const { data, error } = await supabase
-      .from('courses')
-      .select(`
-        *,
-        lessons(*)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching courses:', error);
-      setIsLoading(false);
-      return;
-    }
-
-    const { data: progressData } = await supabase
-      .from('lesson_progress')
-      .select('lesson_id')
-      .eq('user_id', user.id)
-      .eq('is_completed', true);
-    
-    const completedLessonIds = new Set(progressData?.map(p => p.lesson_id) || []);
-
-    const coursesWithProgress: Course[] = (data || []).map(course => {
-      const totalLessons = course.lessons?.length || 0;
-      const completedLessons = course.lessons?.filter(l => completedLessonIds.has(l.id)).length || 0;
-      const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+    try {
+      setIsLoading(true);
+      if (!user) return;
       
-      return {
-        ...course,
-        progress,
-      };
-    });
+      // 1. Busca os cursos e lições
+      const { data, error } = await supabase
+        .from('courses')
+        .select(`
+          *,
+          lessons(*)
+        `)
+        .order('created_at', { ascending: false });
 
-    setCourses(coursesWithProgress);
-    setIsLoading(false);
+      if (error) {
+        console.error('Error fetching courses:', error);
+        throw error;
+      }
+
+      // 2. Busca o progresso do usuário
+      const { data: progressData } = await supabase
+        .from('lesson_progress')
+        .select('lesson_id')
+        .eq('user_id', user.id)
+        .eq('is_completed', true);
+      
+      const completedLessonIds = new Set(progressData?.map(p => p.lesson_id) || []);
+
+      // 3. Processa os dados (CORREÇÃO AQUI)
+      const coursesWithProgress: Course[] = (data || []).map((course: any) => {
+        const lessons = course.lessons || [];
+        const totalLessons = lessons.length;
+
+        // Cálculo de duração: Prioriza o campo do banco, senão soma as aulas
+        const dbDuration = course.duration || course.total_duration;
+        const totalDuration = dbDuration || lessons.reduce((acc: number, l: any) => acc + (l.duration || 0), 0);
+
+        // Contagem de aulas concluídas
+        const completedLessonsCount = lessons.filter((l: any) => completedLessonIds.has(l.id)).length;
+        
+        // Cálculo da porcentagem (Aqui estava o erro: completedLessons vs completedLessonsCount)
+        const progress = totalLessons > 0 ? Math.round((completedLessonsCount / totalLessons) * 100) : 0;
+        
+        return {
+          ...course,
+          lesson_count: totalLessons,
+          total_duration: totalDuration || 0, // Garante que não é NaN
+          progress,
+        };
+      });
+
+      setCourses(coursesWithProgress);
+    } catch (error) {
+      console.error(error);
+      toast({
+          title: "Erro",
+          description: "Falha ao carregar cursos",
+          variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -107,8 +130,9 @@ const Courses: React.FC = () => {
   }, [user]);
 
   const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    const safeMinutes = minutes || 0; // Proteção contra NaN
+    const hours = Math.floor(safeMinutes / 60);
+    const mins = safeMinutes % 60;
     if (hours > 0) {
       return `${hours}h ${mins}min`;
     }
@@ -182,98 +206,121 @@ const Courses: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map((course) => (
-              <Card
-                key={course.id}
-                onClick={() => handleCourseClick(course.id)}
-                className="bg-card border-border overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
-              >
-                <div className="relative aspect-video overflow-hidden">
-                  <img
-                    src={course.cover_image || defaultImage}
-                    alt={course.title}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center">
-                      <Play className="w-6 h-6 text-primary-foreground ml-1" fill="currentColor" />
+            {courses.map((course) => {
+              const isCompleted = course.progress === 100;
+              return (
+                <Card
+                  key={course.id}
+                  onClick={() => handleCourseClick(course.id)}
+                  className="bg-card border-border overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+                >
+                  <div className="relative aspect-video overflow-hidden">
+                    <img
+                      src={course.cover_image || defaultImage}
+                      alt={course.title}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                    />
+                    
+                    {/* Overlay Escuro para Concluídos ou Hover */}
+                    <div className={`absolute inset-0 transition-opacity duration-300 ${
+                      isCompleted 
+                        ? 'bg-black/60 opacity-100' 
+                        : 'bg-gradient-to-t from-card via-transparent to-transparent opacity-0 group-hover:opacity-100'
+                    }`} />
+
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center">
+                        <Play className="w-6 h-6 text-primary-foreground ml-1" fill="currentColor" />
+                      </div>
                     </div>
+                    
+                    {/* Botão de Favorito */}
+                    <div className="absolute top-2 right-12 z-20">
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white rounded-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite('course', course.id);
+                        }}
+                      >
+                        <Heart 
+                          className={`w-4 h-4 transition-all duration-200 ${isFavorite('course', course.id) ? 'text-red-500 fill-current' : 'text-white'}`} 
+                        />
+                      </Button>
+                    </div>
+
+                    {/* Botão de Ações - Apenas Admin */}
+                    {isAdmin() && (
+                      <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white rounded-full">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditCourse(course); }}>
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-red-600 focus:text-red-600"
+                              onClick={(e) => { e.stopPropagation(); setCourseToDelete(course.id); }}
+                            >
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    )}
+
+                    {/* Badge de Concluído */}
+                    {isCompleted && (
+                      <div className="absolute top-2 left-2 px-2 py-1 bg-green-600/90 text-white text-xs font-bold rounded-full flex items-center gap-1 z-10">
+                        <CheckCircle className="w-3 h-3" />
+                        CONCLUÍDO
+                      </div>
+                    )}
+
+                    {/* Badge de Rascunho */}
+                    {!course.published && (
+                      <span className="absolute top-3 left-3 px-2 py-1 bg-yellow-500/80 text-yellow-950 text-xs font-medium rounded">
+                        Rascunho
+                      </span>
+                    )}
+
+                    {/* Barra de Progresso (se não concluído) */}
+                    {course.progress > 0 && !isCompleted && (
+                      <div className="absolute bottom-0 left-0 right-0">
+                        <Progress value={course.progress} className="h-1 rounded-none" />
+                      </div>
+                    )}
                   </div>
                   
-                  {/* Botão de Favorito */}
-                  <div className="absolute top-2 right-12 z-20">
-                    <Button 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite('course', course.id);
-                      }}
-                    >
-                      <Heart 
-                        className={`w-4 h-4 transition-all duration-200 ${isFavorite('course', course.id) ? 'text-red-500 fill-current' : 'text-white'}`} 
-                      />
-                    </Button>
-                  </div>
-
-                  {/* Botão de Ações - Apenas Admin */}
-                  {isAdmin() && (
-                    <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white rounded-full">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditCourse(course); }}>
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="text-red-600 focus:text-red-600"
-                            onClick={(e) => { e.stopPropagation(); setCourseToDelete(course.id); }}
-                          >
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                  <CardContent className="p-4">
+                    <h3 className={`font-semibold text-foreground line-clamp-2 mb-3 group-hover:text-primary transition-colors ${isCompleted ? 'text-muted-foreground' : ''}`}>
+                      {course.title}
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {formatDuration(course.total_duration)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <BookOpen className="w-4 h-4" />
+                        {course.lesson_count || 0} aulas
+                      </span>
                     </div>
-                  )}
-
-                  {course.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0">
-                      <Progress value={course.progress} className="h-1 rounded-none" />
-                    </div>
-                  )}
-                  {!course.published && (
-                    <span className="absolute top-3 left-3 px-2 py-1 bg-yellow-500/80 text-yellow-950 text-xs font-medium rounded">
-                      Rascunho
-                    </span>
-                  )}
-                </div>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold text-foreground line-clamp-2 mb-3 group-hover:text-primary transition-colors">
-                    {course.title}
-                  </h3>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {formatDuration(course.total_duration)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <BookOpen className="w-4 h-4" />
-                      {course.lesson_count} aulas
-                    </span>
-                  </div>
-                  {course.progress > 0 && (
-                    <p className="text-xs text-primary mt-2 font-medium">
-                      {course.progress === 100 ? 'Concluído ✓' : `${course.progress}% concluído`}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                    
+                    {isCompleted && (
+                      <p className="text-xs text-green-600 mt-2 font-medium flex items-center gap-1">
+                         Curso finalizado
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
