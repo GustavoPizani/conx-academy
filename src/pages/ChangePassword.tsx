@@ -46,7 +46,7 @@ const ChangePassword: React.FC = () => {
         title: 'Senha alterada!',
         description: 'Sua senha foi atualizada com sucesso.',
       });
-      navigate('/dashboard');
+      navigate('/home');
     } else {
       toast({
         title: 'Erro',

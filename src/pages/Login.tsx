@@ -34,7 +34,7 @@ const Login: React.FC = () => {
         title: 'Bem-vindo!',
         description: 'Login realizado com sucesso.',
       });
-      navigate('/dashboard');
+      navigate('/home');
     } else {
       toast({
         title: 'Erro no login',

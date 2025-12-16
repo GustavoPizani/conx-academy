@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext'; // Importar useAuth
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { ROLE_LABELS, UserRole } from '@/types/auth';
@@ -23,26 +23,37 @@ interface UserWithRole {
 
 const AdminUsers: React.FC = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useUserRole();
+  const { user } = useAuth(); // Usar o user do contexto diretamente para verificação estável
+  const { isAdmin } = useUserRole(); // Mantemos para uso no template se precisar
+  
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  
+  // Estado para Edição
+  const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
 
   useEffect(() => {
-    if (!isAdmin()) {
-      navigate('/dashboard');
+    // Verificação de segurança: Se não tem user ou não é admin, tchau.
+    // Usamos user?.role diretamente na dependência para evitar o loop.
+    if (user && user.role !== 'admin') {
+      navigate('/home');
       return;
     }
-    fetchUsers();
-  }, [isAdmin, navigate]);
+
+    // Só busca se for admin
+    if (user?.role === 'admin') {
+      fetchUsers();
+    }
+  }, [user?.role, navigate]); // Dependência estável (string ou undefined)
 
   const fetchUsers = async () => {
     setIsLoading(true);
     
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('*, teams(name)')
+      .select('*, teams!team_id(name)')
       .order('name');
 
     if (profilesError) {
@@ -72,6 +83,23 @@ const AdminUsers: React.FC = () => {
 
     setUsers(usersWithRoles);
     setIsLoading(false);
+  };
+
+  // Funções de Ação
+  const handleEdit = (user: UserWithRole) => {
+    setEditingUser(user);
+    setShowAddModal(true);
+  };
+
+  const handleDelete = async (userId: string) => {
+    if (window.confirm("Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.")) {
+      const { error } = await supabase.from('profiles').delete().eq('id', userId);
+      if (!error) {
+        fetchUsers();
+      } else {
+        console.error("Erro ao excluir", error);
+      }
+    }
   };
 
   const filteredUsers = users.filter(user =>
@@ -164,7 +192,17 @@ const AdminUsers: React.FC = () => {
                       {ROLE_LABELS[user.role]}
                     </Badge>
 
-                    <div className="text-right">
+                    {/* Botões de Ação (Adicionados) */}
+                    <div className="flex items-center gap-2 ml-4">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                          <Edit className="w-4 h-4 text-blue-400" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-500 hover:bg-red-900/20" onClick={() => handleDelete(user.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                    </div>
+
+                    <div className="text-right ml-2">
                       <p className="text-sm font-semibold text-primary">{user.points.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">pontos</p>
                     </div>
@@ -178,8 +216,12 @@ const AdminUsers: React.FC = () => {
 
       <AddUserModal
         open={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => {
+            setShowAddModal(false);
+            setEditingUser(null); // Resetar edição ao fechar
+        }}
         onSuccess={fetchUsers}
+        initialData={editingUser} // Passar dados de edição
       />
     </div>
   );

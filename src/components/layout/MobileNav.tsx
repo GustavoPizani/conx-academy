@@ -4,7 +4,7 @@ import { Home, Play, BookOpen, Trophy, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { icon: Home, label: 'Início', href: '/dashboard' },
+  { icon: Home, label: 'Início', href: '/home' },
   { icon: Play, label: 'Cursos', href: '/courses' },
   { icon: BookOpen, label: 'Biblioteca', href: '/library' },
   { icon: Trophy, label: 'Rankings', href: '/rankings' },

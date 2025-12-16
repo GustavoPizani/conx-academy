@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Fetch profile
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('*, teams(name)')
+        .select('*, teams!team_id(name)')
         .eq('id', userId)
         .maybeSingle();
 

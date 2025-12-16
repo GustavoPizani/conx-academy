@@ -25,11 +25,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: Home, label: 'Início', href: '/dashboard' },
+  { icon: Home, label: 'Início', href: '/home' },
   { icon: Play, label: 'Cursos', href: '/courses' },
   { icon: BookOpen, label: 'Biblioteca', href: '/library' },
   { icon: Trophy, label: 'Rankings', href: '/rankings' },
-  { icon: Users, label: 'Usuários', href: '/users', roles: ['admin'] },
+  { icon: Users, label: 'Usuários', href: '/admin/users', roles: ['admin'] },
   { icon: Settings, label: 'Configurações', href: '/settings' },
 ];
 

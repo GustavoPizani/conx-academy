@@ -2,11 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { Loader2 } from "lucide-react";
 import Login from "@/pages/Login";
-import Dashboard from "@/pages/Dashboard";
+import Dashboard from "@/pages/Home";
 import Rankings from "@/pages/Rankings";
 import Courses from "@/pages/Courses";
 import Library from "@/pages/Library";
@@ -15,8 +16,18 @@ import ChangePassword from "@/pages/ChangePassword";
 import AdminUsers from "@/pages/AdminUsers";
 import SetupAdmin from "@/pages/SetupAdmin";
 import NotFound from "@/pages/NotFound";
+import CoursePlayer from "@/pages/CoursePlayer";
+import MyList from "@/pages/MyList";
+import RankingConfig from "@/pages/admin/RankingConfig";
 
 const queryClient = new QueryClient();
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -30,14 +41,23 @@ const App = () => (
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/setup-admin" element={<SetupAdmin />} />
             
+            {/* Player Route (Outside MainLayout) */}
+            <Route path="/player/:courseId" element={
+              <ProtectedRoute>
+                <CoursePlayer />
+              </ProtectedRoute>
+            } />
+
             {/* Protected Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/home" element={<Dashboard />} />
               <Route path="/courses" element={<Courses />} />
               <Route path="/library" element={<Library />} />
               <Route path="/rankings" element={<Rankings />} />
+              <Route path="/my-list" element={<MyList />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/ranking-config" element={<RankingConfig />} />
             </Route>
 
             {/* Redirects */}
