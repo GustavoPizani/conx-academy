@@ -18,7 +18,7 @@ import SetupAdmin from "@/pages/SetupAdmin";
 import NotFound from "@/pages/NotFound";
 import CoursePlayer from "@/pages/CoursePlayer";
 import MyList from "@/pages/MyList";
-import RankingConfig from "@/pages/admin/RankingConfig";
+import RankingConfig from "@/pages/Admin/RankingConfig";
 
 const queryClient = new QueryClient();
 
