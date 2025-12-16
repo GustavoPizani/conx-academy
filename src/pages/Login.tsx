@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, GraduationCap, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('thiago@conxvendas.com.br');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading } = useAuth();
@@ -52,35 +52,17 @@ const Login: React.FC = () => {
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZjY2MDAiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40" />
         
         <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-              <GraduationCap className="w-9 h-9 text-primary-foreground" />
-            </div>
+          <div className="mb-8">
             <div>
-              <h1 className="font-display text-5xl tracking-wider text-foreground">UNIVERSIDADE</h1>
-              <h2 className="font-display text-4xl tracking-wider text-primary">CONX</h2>
+              <img src="/Conxlogologin.png" alt="Conx" className="h-10 w-auto object-contain mt-1" />
+              <h2 className="font-display text-5xl tracking-wider text-foreground mt-2">ACADEMY</h2>
             </div>
           </div>
           
           <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
-            Desenvolva suas habilidades com nossa plataforma de treinamento gamificada. 
+            Plataforma oficial de treinamento e aprendizado da CONX Vendas pra corretores.                
             Aprenda, conquiste pontos e suba no ranking.
           </p>
-
-          <div className="mt-12 flex gap-8">
-            <div className="text-center">
-              <p className="text-4xl font-bold text-primary">500+</p>
-              <p className="text-sm text-muted-foreground mt-1">Cursos</p>
-            </div>
-            <div className="text-center">
-              <p className="text-4xl font-bold text-primary">10k+</p>
-              <p className="text-sm text-muted-foreground mt-1">Alunos</p>
-            </div>
-            <div className="text-center">
-              <p className="text-4xl font-bold text-primary">98%</p>
-              <p className="text-sm text-muted-foreground mt-1">Satisfação</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -88,14 +70,9 @@ const Login: React.FC = () => {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-10">
-            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-              <GraduationCap className="w-7 h-7 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-display text-2xl tracking-wider text-foreground">UNIVERSIDADE</h1>
-              <h2 className="font-display text-xl tracking-wider text-primary -mt-1">CONX</h2>
-            </div>
+          <div className="lg:hidden flex flex-col items-center justify-center mb-10">
+            <img src="/Conxlogologin.png" alt="Conx" className="h-8 w-auto object-contain" />
+            <h2 className="font-display text-2xl tracking-wider text-foreground mt-1">ACADEMY</h2>
           </div>
 
           <div className="text-center lg:text-left mb-8">

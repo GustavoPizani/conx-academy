@@ -9,8 +9,7 @@ import {
   Users, 
   LogOut,
   ChevronLeft,
-  ChevronRight,
-  GraduationCap
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,21 +52,13 @@ export const Sidebar: React.FC = () => {
       onMouseLeave={() => setIsExpanded(false)}
     >
       {/* Logo */}
-      <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-            <GraduationCap className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span
-            className={cn(
-              'font-display text-2xl text-foreground tracking-wider transition-opacity duration-300',
-              isExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
-            )}
-          >
-            CONX
-          </span>
-        </div>
-      </div>
+      <Link to="/home" className="flex items-center h-16 px-4 border-b border-sidebar-border">
+        <img
+          src="/logosidebar.png"
+          alt="Conx Logo"
+          className="h-10 w-auto object-contain"
+        />
+      </Link>
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1">
