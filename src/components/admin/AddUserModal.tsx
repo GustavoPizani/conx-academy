@@ -123,29 +123,30 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ open, onClose, onSuccess, i
   }, [open, initialData]);
 
   // Função Auxiliar: Garante que o Líder tenha um time e retorna o ID desse time
-  const getOrCreateTeamForLeader = async (leaderId: string, leaderName: string, parentTeamId: string | null = null) => {
-    // 1. Verifica se já existe time liderado por ele
-    const { data: existingTeam } = await supabase
+  const getOrCreateTeamForLeader = async (leaderId: string, leaderName: string, parentTeamId: string | null = null): Promise<string> => {
+    // 1. Verifica se já existe time com esse nome para o líder
+    const { data: existingTeams } = await supabase
       .from('teams')
-      .select('id')
-      .eq('leader_id', leaderId)
-      .maybeSingle();
+      .select('id, name')
+      .eq('name', `Time ${leaderName}`)
+      .limit(1);
 
-    if (existingTeam) return existingTeam.id;
+    if (existingTeams && existingTeams.length > 0) {
+      return existingTeams[0].id;
+    }
 
     // 2. Se não existe, cria um novo time
     const { data: newTeam, error } = await supabase
       .from('teams')
       .insert({
-        name: `Time ${leaderName}`, // Ex: Time Gustavo
-        leader_id: leaderId,
+        name: `Time ${leaderName}`,
         parent_team_id: parentTeamId
       })
       .select()
       .single();
 
     if (error) throw error;
-    return newTeam.id;
+    return newTeam!.id;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

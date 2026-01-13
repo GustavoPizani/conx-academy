@@ -34,21 +34,43 @@ export function usePoints() {
 
     try {
       // 2. Fetch ranking config
-      const { data: config, error: configError } = await supabase.from('ranking_config').select('*').limit(1).single();
-      if (configError || !config) throw new Error('Ranking config not found.');
+      const { data: config, error: configError } = await supabase
+        .from('ranking_config')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+        
+      if (configError || !config) {
+        console.warn('Ranking config not found, using defaults.');
+      }
+      
+      const courseCompletionPoints = (config as any)?.course_completion_points ?? 100;
 
       // 3. Fetch course to get lesson count
-      const { data: course, error: courseError } = await supabase.from('courses').select('lessons(count)').eq('id', courseId).single();
-      if (courseError || !course) throw new Error('Course not found.');
+      const { data: lessonsData, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('course_id', courseId);
+        
+      if (lessonsError) throw new Error('Course lessons not found.');
 
-      const totalLessons = course.lessons[0]?.count || 1;
-      const points = Math.round(config.course_completion_points / totalLessons);
+      const totalLessons = lessonsData?.length || 1;
+      const points = Math.round(courseCompletionPoints / totalLessons);
 
       if (points <= 0) return;
 
       // 4. Insert into history and update profile points via RPC
-      await supabase.from('user_points_history').insert({ user_id: user.id, points, source_type: 'lesson', reference_id: lessonId });
-      await supabase.rpc('increment_user_points', { user_id_to_update: user.id, points_to_add: points });
+      await supabase.from('user_points_history').insert({ 
+        user_id: user.id, 
+        points, 
+        source_type: 'lesson', 
+        reference_id: lessonId 
+      });
+      
+      await supabase.rpc('increment_user_points', { 
+        user_id_to_update: user.id, 
+        points_to_add: points 
+      });
 
       toast({ title: `+${points} pontos!`, description: 'Aula concluída.' });
       await refreshProfile(); // Refresh user context to show new points
@@ -83,15 +105,29 @@ export function usePoints() {
     }
 
     try {
-      const { data: config, error: configError } = await supabase.from('ranking_config').select('*').limit(1).single();
-      if (configError || !config) throw new Error('Ranking config not found.');
-
-      const points = type === 'book_pdf' ? config.book_access_points : config.podcast_access_points;
+      const { data: config, error: configError } = await supabase
+        .from('ranking_config')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+        
+      const bookPoints = (config as any)?.book_access_points ?? 5;
+      const podcastPoints = (config as any)?.podcast_access_points ?? 5;
+      const points = type === 'book_pdf' ? bookPoints : podcastPoints;
 
       if (points <= 0) return;
 
-      await supabase.from('user_points_history').insert({ user_id: user.id, points, source_type: 'resource', reference_id: resourceId });
-      await supabase.rpc('increment_user_points', { user_id_to_update: user.id, points_to_add: points });
+      await supabase.from('user_points_history').insert({ 
+        user_id: user.id, 
+        points, 
+        source_type: 'resource', 
+        reference_id: resourceId 
+      });
+      
+      await supabase.rpc('increment_user_points', { 
+        user_id_to_update: user.id, 
+        points_to_add: points 
+      });
 
       toast({ title: `+${points} pontos!`, description: 'Material acessado.' });
       await refreshProfile();

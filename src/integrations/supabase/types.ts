@@ -47,6 +47,103 @@ export type Database = {
         }
         Relationships: []
       }
+      favorites: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          id: string
+          resource_id: string | null
+          user_id: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          id?: string
+          resource_id?: string | null
+          user_id: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          id?: string
+          resource_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorites_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lesson_views: {
+        Row: {
+          completed: boolean | null
+          course_id: string
+          ended_at: string | null
+          id: string
+          lesson_id: string
+          session_id: string | null
+          started_at: string
+          user_id: string
+          watch_time_seconds: number | null
+        }
+        Insert: {
+          completed?: boolean | null
+          course_id: string
+          ended_at?: string | null
+          id?: string
+          lesson_id: string
+          session_id?: string | null
+          started_at?: string
+          user_id: string
+          watch_time_seconds?: number | null
+        }
+        Update: {
+          completed?: boolean | null
+          course_id?: string
+          ended_at?: string | null
+          id?: string
+          lesson_id?: string
+          session_id?: string | null
+          started_at?: string
+          user_id?: string
+          watch_time_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_views_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_views_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_views_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "user_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lessons: {
         Row: {
           course_id: string
@@ -164,6 +261,36 @@ export type Database = {
           },
         ]
       }
+      ranking_config: {
+        Row: {
+          book_access_points: number
+          course_completion_points: number
+          created_at: string
+          id: string
+          podcast_access_points: number
+          rewatch_course_points: number
+          updated_at: string
+        }
+        Insert: {
+          book_access_points?: number
+          course_completion_points?: number
+          created_at?: string
+          id?: string
+          podcast_access_points?: number
+          rewatch_course_points?: number
+          updated_at?: string
+        }
+        Update: {
+          book_access_points?: number
+          course_completion_points?: number
+          created_at?: string
+          id?: string
+          podcast_access_points?: number
+          rewatch_course_points?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       resource_logs: {
         Row: {
           accessed_at: string
@@ -276,6 +403,36 @@ export type Database = {
           },
         ]
       }
+      user_points_history: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          points: number
+          reference_id: string | null
+          source_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          points: number
+          reference_id?: string | null
+          source_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          points?: number
+          reference_id?: string | null
+          source_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -290,6 +447,39 @@ export type Database = {
         Update: {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_sessions: {
+        Row: {
+          device_info: string | null
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          ip_address: string | null
+          last_activity_at: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          device_info?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          ip_address?: string | null
+          last_activity_at?: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          device_info?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          ip_address?: string | null
+          last_activity_at?: string
+          started_at?: string
           user_id?: string
         }
         Relationships: []
@@ -309,6 +499,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_user_points: {
+        Args: { points_to_add: number; user_id_to_update: string }
+        Returns: undefined
       }
       is_admin_or_coordinator: { Args: { _user_id: string }; Returns: boolean }
     }
