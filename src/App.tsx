@@ -19,6 +19,7 @@ import NotFound from "@/pages/NotFound";
 import CoursePlayer from "@/pages/CoursePlayer";
 import MyList from "@/pages/MyList";
 import RankingConfig from "@/pages/Admin/RankingConfig";
+import AdminAnalytics from "@/pages/AdminAnalytics";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/ranking-config" element={<RankingConfig />} />
+              <Route path="/admin/analytics" element={<ProtectedRoute><AdminAnalytics /></ProtectedRoute>} />
             </Route>
 
             {/* Redirects */}

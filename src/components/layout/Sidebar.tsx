@@ -9,7 +9,8 @@ import {
   Users, 
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
   { icon: BookOpen, label: 'Biblioteca', href: '/library' },
   { icon: Trophy, label: 'Rankings', href: '/rankings' },
   { icon: Users, label: 'Usuários', href: '/admin/users', roles: ['admin'] },
+  { icon: Activity, label: 'Análises', href: '/admin/analytics', roles: ['admin'] },
   { icon: Settings, label: 'Configurações', href: '/settings' },
 ];
 
