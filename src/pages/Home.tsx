@@ -65,20 +65,29 @@ const Home: React.FC = () => {
         setNewCourses(processedNewCourses);
       }
 
-      // Fetch Continue Watching
+      // Fetch Continue Watching - using the progress table
       const { data: progressData, error: progressError } = await supabase
-        .from('lesson_progress')
-        .select('viewed_at, lessons!inner(id, course_id, courses!inner(*, lessons(*)))')
+        .from('progress')
+        .select('lesson_id, viewed_at, is_completed')
         .eq('user_id', user.id)
         .order('viewed_at', { ascending: false });
 
       if (progressError) {
         console.error("Error fetching progress:", progressError);
-      } else if (progressData) {
-        // Use a Map to get unique courses, ordered by the most recently viewed lesson
+      } else if (progressData && progressData.length > 0) {
+        // Get unique lesson IDs to fetch their courses
+        const lessonIds = [...new Set(progressData.map((p: any) => p.lesson_id))];
+        
+        // Fetch lessons with their courses
+        const { data: lessonsWithCourses } = await supabase
+          .from('lessons')
+          .select('id, course_id, courses!inner(*, lessons(*))')
+          .in('id', lessonIds);
+
+        // Build course map from lessons
         const courseMap = new Map<string, any>();
-        for (const progress of progressData) {
-          const course = progress.lessons?.courses;
+        for (const lesson of (lessonsWithCourses || [])) {
+          const course = (lesson as any).courses;
           if (course && !courseMap.has(course.id)) {
             courseMap.set(course.id, course);
           }
@@ -86,14 +95,10 @@ const Home: React.FC = () => {
 
         const coursesToDisplay = Array.from(courseMap.values());
 
-        // Get all completed lessons for the user to calculate progress accurately
-        const { data: allUserProgress } = await supabase
-          .from('lesson_progress')
-          .select('lesson_id')
-          .eq('user_id', user.id)
-          .eq('is_completed', true);
-        
-        const completedLessonIds = new Set(allUserProgress?.map(p => p.lesson_id) || []);
+        // Get completed lesson IDs
+        const completedLessonIds = new Set(
+          progressData.filter((p: any) => p.is_completed).map((p: any) => p.lesson_id)
+        );
 
         const inProgressCourses: ContentItem[] = [];
         const completedCourses: ContentItem[] = [];

@@ -31,30 +31,30 @@ const MyList: React.FC = () => {
         return;
       }
 
-      const processedItems: ContentItem[] = (data || []).map(fav => {
-        if (fav.courses) {
-          const course = fav.courses;
-          return {
+      const processedItems: ContentItem[] = [];
+      
+      for (const fav of (data || [])) {
+        if ((fav as any).courses) {
+          const course = (fav as any).courses;
+          processedItems.push({
             id: course.id,
             title: course.title,
             thumbnail: course.cover_image,
-            type: 'course',
+            type: 'course' as const,
             lessons: course.lessons?.length || 0,
             duration: course.lessons?.reduce((sum: number, l: any) => sum + (l.duration || 0), 0) || 0,
-          };
-        }
-        if (fav.resources) {
-          const resource = fav.resources;
-          return {
+          });
+        } else if ((fav as any).resources) {
+          const resource = (fav as any).resources;
+          processedItems.push({
             id: resource.id,
             title: resource.title,
             thumbnail: resource.cover_image,
-            type: resource.type,
+            type: resource.type as 'book_pdf' | 'podcast_audio',
             url: resource.url,
-          };
+          });
         }
-        return null;
-      }).filter((item): item is ContentItem => item !== null);
+      }
 
       setFavoriteCourses(processedItems.filter(item => item.type === 'course'));
       setFavoriteBooks(processedItems.filter(item => item.type === 'book_pdf'));

@@ -82,12 +82,12 @@ const Courses: React.FC = () => {
 
       // 2. Busca o progresso do usuário
       const { data: progressData } = await supabase
-        .from('lesson_progress')
+        .from('progress')
         .select('lesson_id')
         .eq('user_id', user.id)
         .eq('is_completed', true);
       
-      const completedLessonIds = new Set(progressData?.map(p => p.lesson_id) || []);
+      const completedLessonIds = new Set(progressData?.map((p: any) => p.lesson_id) || []);
 
       // 3. Processa os dados (CORREÇÃO AQUI)
       const coursesWithProgress: Course[] = (data || []).map((course: any) => {

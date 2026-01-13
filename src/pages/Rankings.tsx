@@ -133,7 +133,6 @@ const Rankings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('students');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Estado real dos dados
   const [rankings, setRankings] = useState<Record<string, RankingUser[]>>({
     students: [],
     managers: [],
@@ -151,39 +150,44 @@ const Rankings: React.FC = () => {
       const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-      const [
-        { data: profiles, error: profilesError },
-        { data: teams, error: teamsError },
-        { data: roles, error: rolesError },
-        { data: pointsHistory, error: pointsError },
-      ] = await Promise.all([
+      const [profilesResult, teamsResult, rolesResult, pointsResult] = await Promise.all([
         supabase.from('profiles').select('id, name, team_id'),
         supabase.from('teams').select('id, name'),
         supabase.from('user_roles').select('user_id, role'),
         supabase.from('user_points_history').select('user_id, points').gte('created_at', startDate).lte('created_at', endDate),
       ]);
 
-      if (profilesError || teamsError || rolesError || pointsError) {
-        console.error('Error fetching ranking data:', { profilesError, teamsError, rolesError, pointsError });
+      if (profilesResult.error || teamsResult.error || rolesResult.error || pointsResult.error) {
+        console.error('Error fetching ranking data:', { 
+          profilesError: profilesResult.error, 
+          teamsError: teamsResult.error, 
+          rolesError: rolesResult.error, 
+          pointsError: pointsResult.error 
+        });
         setIsLoading(false);
         return;
       }
 
-      const teamMap = new Map(teams.map(t => [t.id, t.name]));
-      const roleMap = new Map(roles.map(r => [r.user_id, r.role]));
+      const profiles = profilesResult.data || [];
+      const teams = teamsResult.data || [];
+      const roles = rolesResult.data || [];
+      const pointsHistory = pointsResult.data || [];
+
+      const teamMap = new Map(teams.map((t: any) => [t.id, t.name]));
+      const roleMap = new Map(roles.map((r: any) => [r.user_id, r.role]));
 
       const pointsMap = new Map<string, number>();
-      pointsHistory.forEach(entry => {
+      pointsHistory.forEach((entry: any) => {
         pointsMap.set(entry.user_id, (pointsMap.get(entry.user_id) || 0) + entry.points);
       });
 
-      const allUsers: RankingUser[] = profiles.map(p => ({
+      const allUsers: RankingUser[] = profiles.map((p: any) => ({
         id: p.id,
         name: p.name || 'Usuário',
         teamName: p.team_id ? teamMap.get(p.team_id) || 'N/A' : 'N/A',
         points: pointsMap.get(p.id) || 0,
         role: (roleMap.get(p.id) as UserRole) || 'student',
-        trend: 'same', 
+        trend: 'same' as const, 
       }));
 
       const groupedRankings: Record<string, RankingUser[]> = {
@@ -197,7 +201,6 @@ const Rankings: React.FC = () => {
       if (user) {
         setUserMonthlyPoints(pointsMap.get(user.id) || 0);
         
-        const roleKey = user.role === 'admin' || user.role === 'coordinator' ? 'students' : (user.role + 's').replace('ss', 's');
         const targetList = groupedRankings[user.role === 'student' ? 'students' : user.role === 'manager' ? 'managers' : 'superintendents'] || groupedRankings.students;
         
         const position = targetList.findIndex(u => u.id === user.id) + 1;
@@ -344,7 +347,6 @@ const Rankings: React.FC = () => {
             </CardHeader>
 
             {visibleTabs.map((tab) => {
-              // CORREÇÃO AQUI: Usar rankings[tab] em vez de mockRankings
               const currentList = rankings[tab] || [];
               return (
                 <TabsContent key={tab} value={tab} className="mt-0">

@@ -75,13 +75,17 @@ const CoursePlayer = () => {
       setCourse(courseData);
       setLessons(sortedLessons);
 
-      const { data: progressData } = await supabase
-        .from('lesson_progress')
-        .select('lesson_id')
-        .eq('is_completed', true);
-        
-      if (progressData) {
-        setCompletedLessonIds(new Set(progressData.map(p => p.lesson_id)));
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: progressData } = await supabase
+          .from('progress')
+          .select('lesson_id')
+          .eq('user_id', currentUser.id)
+          .eq('is_completed', true);
+          
+        if (progressData) {
+          setCompletedLessonIds(new Set(progressData.map((p: any) => p.lesson_id)));
+        }
       }
 
       setIsLoading(false);
@@ -128,11 +132,15 @@ const CoursePlayer = () => {
         await awardLessonCompletion(courseId!, currentLesson.id);
     }
 
-    const { error } = await supabase.from('lesson_progress').upsert({
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) return;
+
+    const { error } = await supabase.from('progress').upsert({
+      user_id: currentUser.id,
       lesson_id: currentLesson.id,
       is_completed: true,
       viewed_at: new Date().toISOString(),
-    });
+    }, { onConflict: 'user_id,lesson_id' });
 
     if (!error) {
       setCompletedLessonIds(prev => new Set(prev).add(currentLesson.id));

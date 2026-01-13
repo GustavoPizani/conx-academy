@@ -28,7 +28,7 @@ export function useFavorites() {
         console.error('Error fetching favorites:', error);
       } else {
         const favoriteSet = new Set<string>();
-        data.forEach(fav => {
+        (data || []).forEach((fav: any) => {
           if (fav.course_id) favoriteSet.add(`course-${fav.course_id}`);
           if (fav.resource_id) favoriteSet.add(`resource-${fav.resource_id}`);
         });
@@ -58,24 +58,33 @@ export function useFavorites() {
       newFavorites.delete(key);
       setFavorites(newFavorites);
 
-      await supabase
+      const deleteQuery = supabase
         .from('favorites')
         .delete()
-        .eq('user_id', user.id)
-        .eq(type === 'course' ? 'course_id' : 'resource_id', id);
+        .eq('user_id', user.id);
+      
+      if (type === 'course') {
+        await deleteQuery.eq('course_id', id);
+      } else {
+        await deleteQuery.eq('resource_id', id);
+      }
     } else {
       newFavorites.add(key);
       setFavorites(newFavorites);
 
-      await supabase
-        .from('favorites')
-        .insert({
+      if (type === 'course') {
+        await supabase.from('favorites').insert({
           user_id: user.id,
-          [type === 'course' ? 'course_id' : 'resource_id']: id,
+          course_id: id,
         });
+      } else {
+        await supabase.from('favorites').insert({
+          user_id: user.id,
+          resource_id: id,
+        });
+      }
     }
   }, [favorites, user, toast]);
 
   return { isFavorite, toggleFavorite, isLoadingFavorites: isLoading };
 }
-
