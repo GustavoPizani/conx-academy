@@ -3,9 +3,13 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSession } from '@/hooks/useSession';
 
 export const MainLayout: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
+  
+  // Initialize session tracking for logged-in users
+  useSession();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
