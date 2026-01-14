@@ -11,22 +11,19 @@ interface UserSession {
   id: string;
   started_at: string;
   ended_at: string | null;
-  profiles: {
-    name: string;
-    email: string;
-  } | null;
+  duration_seconds: number | null;
+  user_name?: string;
+  user_email?: string;
 }
 
 interface LessonView {
   id: string;
-  viewed_at: string;
-  profiles: {
-    name: string;
-    email: string;
-  } | null;
-  lessons: {
-    title: string;
-  } | null;
+  started_at: string;
+  watch_time_seconds: number | null;
+  completed: boolean | null;
+  user_name?: string;
+  user_email?: string;
+  lesson_title?: string;
 }
 
 const AdminAnalytics: React.FC = () => {
@@ -51,29 +48,55 @@ const AdminAnalytics: React.FC = () => {
   const fetchAnalytics = async () => {
     setIsLoading(true);
 
-    const [sessionsRes, lessonViewsRes] = await Promise.all([
+    // Buscar sessões separadamente e depois enriquecer com dados de profiles
+    const [sessionsRes, lessonViewsRes, profilesRes] = await Promise.all([
       supabase
         .from('user_sessions')
-        .select('id, started_at, ended_at, profiles(name, email)')
+        .select('id, user_id, started_at, ended_at, duration_seconds')
         .order('started_at', { ascending: false })
         .limit(20),
       supabase
         .from('lesson_views')
-        .select('id, viewed_at, profiles(name, email), lessons(title)')
-        .order('viewed_at', { ascending: false })
-        .limit(20)
+        .select('id, user_id, lesson_id, started_at, watch_time_seconds, completed')
+        .order('started_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('profiles')
+        .select('id, name, email')
     ]);
+
+    // Buscar lições para enriquecer lesson_views
+    const { data: lessonsData } = await supabase.from('lessons').select('id, title');
+    const lessonsMap = new Map(lessonsData?.map(l => [l.id, l.title]) || []);
+    const profilesMap = new Map(profilesRes.data?.map(p => [p.id, { name: p.name, email: p.email }]) || []);
 
     if (sessionsRes.error) {
       console.error('Error fetching user sessions:', sessionsRes.error);
     } else {
-      setSessions(sessionsRes.data as UserSession[]);
+      const enrichedSessions: UserSession[] = (sessionsRes.data || []).map(s => ({
+        id: s.id,
+        started_at: s.started_at,
+        ended_at: s.ended_at,
+        duration_seconds: s.duration_seconds,
+        user_name: profilesMap.get(s.user_id)?.name,
+        user_email: profilesMap.get(s.user_id)?.email,
+      }));
+      setSessions(enrichedSessions);
     }
 
     if (lessonViewsRes.error) {
       console.error('Error fetching lesson views:', lessonViewsRes.error);
     } else {
-      setLessonViews(lessonViewsRes.data as LessonView[]);
+      const enrichedViews: LessonView[] = (lessonViewsRes.data || []).map(v => ({
+        id: v.id,
+        started_at: v.started_at,
+        watch_time_seconds: v.watch_time_seconds,
+        completed: v.completed,
+        user_name: profilesMap.get(v.user_id)?.name,
+        user_email: profilesMap.get(v.user_id)?.email,
+        lesson_title: lessonsMap.get(v.lesson_id),
+      }));
+      setLessonViews(enrichedViews);
     }
 
     setIsLoading(false);
@@ -119,11 +142,11 @@ const AdminAnalytics: React.FC = () => {
                     <div key={session.id} className="flex items-center gap-4 p-3 rounded-lg bg-surface">
                       <Avatar className="h-10 w-10 border-2 border-border">
                         <AvatarFallback className="bg-primary/20 text-primary font-semibold">
-                          {session.profiles?.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                          {session.user_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground truncate">{session.profiles?.name || 'Usuário desconhecido'}</p>
+                        <p className="font-semibold text-foreground truncate">{session.user_name || 'Usuário desconhecido'}</p>
                         <p className="text-sm text-muted-foreground truncate">{new Date(session.started_at).toLocaleString('pt-BR')}</p>
                       </div>
                       <div className="text-right text-sm">
@@ -154,19 +177,19 @@ const AdminAnalytics: React.FC = () => {
                     <div key={view.id} className="flex items-center gap-4 p-3 rounded-lg bg-surface">
                       <Avatar className="h-10 w-10 border-2 border-border">
                         <AvatarFallback className="bg-primary/20 text-primary font-semibold">
-                          {view.profiles?.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                          {view.user_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-foreground truncate">{view.profiles?.name || 'Usuário desconhecido'}</p>
-                        <p className="text-sm text-muted-foreground truncate" title={view.lessons?.title}>
-                          Viu: <span className="font-medium text-foreground/90">{view.lessons?.title || 'Aula desconhecida'}</span>
+                        <p className="font-semibold text-foreground truncate">{view.user_name || 'Usuário desconhecido'}</p>
+                        <p className="text-sm text-muted-foreground truncate" title={view.lesson_title}>
+                          Viu: <span className="font-medium text-foreground/90">{view.lesson_title || 'Aula desconhecida'}</span>
                         </p>
                       </div>
                       <div className="text-right text-sm">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Eye className="w-4 h-4" />
-                          <span>{new Date(view.viewed_at).toLocaleString('pt-BR')}</span>
+                          <span>{new Date(view.started_at).toLocaleString('pt-BR')}</span>
                         </div>
                       </div>
                     </div>
