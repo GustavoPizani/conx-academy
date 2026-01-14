@@ -92,12 +92,25 @@ const AdminUsers: React.FC = () => {
   };
 
   const handleDelete = async (userId: string) => {
-    if (window.confirm("Tem certeza que deseja excluir este usuário? Esta ação não pode ser desfeita.")) {
-      const { error } = await supabase.from('profiles').delete().eq('id', userId);
-      if (!error) {
+    if (window.confirm("Tem certeza que deseja excluir este usuário completamente (Auth + Banco)? Esta ação não pode ser desfeita.")) {
+      // Usar a função RPC que deleta do Auth e do DB
+      const { data, error } = await supabase.rpc('delete_user_entirely', {
+        user_id_to_delete: userId
+      });
+      
+      if (!error && data) {
+        // Toast de sucesso
+        const { toast } = await import('sonner');
+        toast.success('Usuário excluído com sucesso', {
+          description: 'O usuário foi removido da autenticação e do banco de dados.'
+        });
         fetchUsers();
       } else {
         console.error("Erro ao excluir", error);
+        const { toast } = await import('sonner');
+        toast.error('Erro ao excluir usuário', {
+          description: error?.message || 'Não foi possível excluir o usuário.'
+        });
       }
     }
   };

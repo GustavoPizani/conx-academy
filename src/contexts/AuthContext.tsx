@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  const fetchUserProfile = async (userId: string, userEmail?: string): Promise<UserProfile | null> => {
     try {
       // Fetch profile
       const { data: profile, error: profileError } = await supabase
@@ -44,10 +44,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (profileError) {
         console.error('Error fetching profile:', profileError);
-        return null;
       }
 
-      if (!profile) return null;
+      // Se não há perfil mas temos sessão válida, criar um perfil fallback
+      // Isso acontece quando o trigger não foi executado para usuários antigos
+      if (!profile) {
+        console.warn('Profile not found for user, this may indicate sync issue. User ID:', userId);
+        
+        // Retornar perfil fallback para evitar loop infinito
+        // O trigger de backfill deveria ter corrigido isso, mas vamos ser resilientes
+        return {
+          id: userId,
+          email: userEmail || 'unknown@email.com',
+          name: userEmail?.split('@')[0] || 'Usuário',
+          role: 'student' as UserRole,
+          teamId: undefined,
+          teamName: undefined,
+          points: 0,
+          isFirstLogin: true,
+          avatarUrl: undefined,
+        };
+      }
 
       // Fetch role
       const { data: roleData, error: roleError } = await supabase
@@ -95,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (newSession?.user) {
           // Defer profile fetch with setTimeout to avoid deadlock
           setTimeout(() => {
-            fetchUserProfile(newSession.user.id).then((profile) => {
+            fetchUserProfile(newSession.user.id, newSession.user.email).then((profile) => {
               setUser(profile);
               setIsLoading(false);
             });
@@ -111,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
       setSession(existingSession);
       if (existingSession?.user) {
-        fetchUserProfile(existingSession.user.id).then((profile) => {
+        fetchUserProfile(existingSession.user.id, existingSession.user.email).then((profile) => {
           setUser(profile);
           setIsLoading(false);
         });
@@ -140,7 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     if (data.session) {
-      const profile = await fetchUserProfile(data.session.user.id);
+      const profile = await fetchUserProfile(data.session.user.id, data.session.user.email);
       setUser(profile);
       setSession(data.session);
     }
