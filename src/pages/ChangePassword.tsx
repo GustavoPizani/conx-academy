@@ -65,8 +65,8 @@ const ChangePassword: React.FC = () => {
             <GraduationCap className="w-7 h-7 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-display text-2xl tracking-wider text-foreground">UNIVERSIDADE</h1>
-            <h2 className="font-display text-xl tracking-wider text-primary -mt-1">CONX</h2>
+            <img src="/Conxlogologin.png" alt="Conx" className="h-10 w-auto object-contain mt-1" />
+            <h2 className="font-display text-2xl tracking-wider text-foreground">ACADEMY</h2>
           </div>
         </div>
 
