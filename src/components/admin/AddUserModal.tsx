@@ -230,7 +230,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ open, onClose, onSuccess, i
             // === MODO CRIAÇÃO (CLIENTE TEMP) ===
             const tempClient = createClient(
                 import.meta.env.VITE_SUPABASE_URL,
-                import.meta.env.VITE_SUPABASE_ANON_KEY,
+                import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
                 { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
             );
 
