@@ -45,6 +45,15 @@ interface UserSession {
   manager_name?: string;
 }
 
+interface CourseProgressData {
+  userId: string;
+  userName?: string;
+  managerName?: string;
+  courseName: string;
+  completionPercentage: number;
+  status: 'CONCLUÍDO' | 'EM PROGRESSO' | 'NÃO INICIADO';
+}
+
 interface LessonView {
   id: string;
   user_id: string;
@@ -72,11 +81,12 @@ const AdminAnalytics: React.FC = () => {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [date, setDate] = useState<DateRange | undefined>();
   const [activeTab, setActiveTab] = useState('sessions');
+  const [courseProgress, setCourseProgress] = useState<CourseProgressData[]>([]);
 
   const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [sessionsRes, lessonViewsRes, profilesRes, lessonsRes, teamsRes, rolesRes] = await Promise.all([
+      const [sessionsRes, lessonViewsRes, profilesRes, lessonsRes, teamsRes, rolesRes, coursesRes, progressRes] = await Promise.all([
         supabase
           .from('user_sessions')
           .select('id, user_id, started_at, ended_at, duration_seconds')
@@ -90,13 +100,20 @@ const AdminAnalytics: React.FC = () => {
           .select('id, name, email, team_id'),
         supabase
           .from('lessons')
-          .select('id, title'),
+          .select('id, title, course_id'),
         supabase
           .from('teams')
           .select('id, name'),
         supabase
           .from('user_roles')
-          .select('user_id, role')
+          .select('user_id, role'),
+        supabase
+          .from('courses')
+          .select('id, title'),
+        supabase
+          .from('progress')
+          .select('user_id, lesson_id')
+          .eq('is_completed', true)
       ]);
 
       if (sessionsRes.error) throw sessionsRes.error;
@@ -105,8 +122,10 @@ const AdminAnalytics: React.FC = () => {
       if (lessonsRes.error) throw lessonsRes.error;
       if (teamsRes.error) throw teamsRes.error;
       if (rolesRes.error) throw rolesRes.error;
+      if (coursesRes.error) throw coursesRes.error;
+      if (progressRes.error) throw progressRes.error;
 
-      const lessonsMap = new Map(lessonsRes.data?.map(l => [l.id, l.title]) || []);
+      const lessonsMap = new Map(lessonsRes.data?.map(l => [l.id, { title: l.title, course_id: l.course_id }]) || []);
       const profilesMap = new Map(profilesRes.data?.map(p => [p.id, { name: p.name, email: p.email, team_id: p.team_id }]) || []);
       const rolesMap = new Map(rolesRes.data?.map(r => [r.user_id, r.role]) || []);
 
@@ -141,9 +160,44 @@ const AdminAnalytics: React.FC = () => {
         const profile = profilesMap.get(v.user_id);
         const teamId = profile?.team_id;
         const managerName = teamId ? teamToManagerNameMap.get(teamId) : undefined;
-        return { ...v, user_name: profile?.name, user_email: profile?.email, lesson_title: lessonsMap.get(v.lesson_id), manager_name: managerName };
+        return { ...v, user_name: profile?.name, user_email: profile?.email, lesson_title: lessonsMap.get(v.lesson_id)?.title, manager_name: managerName };
       });
       setLessonViews(enrichedViews);
+
+      // Course Progress Calculation
+      const coursesMap = new Map(coursesRes.data?.map(c => [c.id, c.title]) || []);
+      const courseLessonCounts = new Map<string, number>();
+      for (const lesson of lessonsRes.data || []) {
+        courseLessonCounts.set(lesson.course_id, (courseLessonCounts.get(lesson.course_id) || 0) + 1);
+      }
+
+      const userCourseCompletions = new Map<string, Map<string, number>>();
+      for (const p of progressRes.data || []) {
+        const lesson = lessonsMap.get(p.lesson_id);
+        if (lesson) {
+          const courseId = lesson.course_id;
+          if (!userCourseCompletions.has(p.user_id)) {
+            userCourseCompletions.set(p.user_id, new Map());
+          }
+          const userMap = userCourseCompletions.get(p.user_id)!;
+          userMap.set(courseId, (userMap.get(courseId) || 0) + 1);
+        }
+      }
+
+      const courseProgressData: CourseProgressData[] = [];
+      for (const profile of profilesRes.data || []) {
+        const managerName = profile.team_id ? teamToManagerNameMap.get(profile.team_id) : undefined;
+        for (const [courseId, courseTitle] of coursesMap.entries()) {
+          const totalLessons = courseLessonCounts.get(courseId) || 0;
+          if (totalLessons > 0) {
+            const completedLessons = userCourseCompletions.get(profile.id)?.get(courseId) || 0;
+            const percentage = Math.round((completedLessons / totalLessons) * 100);
+            const status = percentage >= 100 ? 'CONCLUÍDO' : (completedLessons > 0 ? 'EM PROGRESSO' : 'NÃO INICIADO');
+            courseProgressData.push({ userId: profile.id, userName: profile.name, managerName, courseName: courseTitle, completionPercentage: percentage, status });
+          }
+        }
+      }
+      setCourseProgress(courseProgressData);
 
     } catch (error: any) {
       console.error('Error fetching analytics:', error);
@@ -185,6 +239,13 @@ const AdminAnalytics: React.FC = () => {
     });
   }, [lessonViews, selectedUserId, date]);
 
+  const filteredCourseProgress = useMemo(() => {
+    if (!selectedUserId) {
+      return courseProgress;
+    }
+    return courseProgress.filter(p => p.userId === selectedUserId);
+  }, [courseProgress, selectedUserId]);
+
   const formatDuration = (start: string, end: string | null) => {
     if (!end) return 'Em andamento';
     const duration = new Date(end).getTime() - new Date(start).getTime();
@@ -194,7 +255,7 @@ const AdminAnalytics: React.FC = () => {
   };
 
   const exportToXLSX = useCallback(() => {
-    if (filteredSessions.length === 0 && filteredLessonViews.length === 0) {
+    if (filteredSessions.length === 0 && filteredLessonViews.length === 0 && filteredCourseProgress.length === 0) {
       toast({ title: 'Nenhum dado para exportar', description: 'Aplique filtros diferentes ou aguarde novos dados.', variant: 'default' });
       return;
     }
@@ -225,13 +286,24 @@ const AdminAnalytics: React.FC = () => {
     const wsAulas = XLSX.utils.json_to_sheet(viewsData);
     XLSX.utils.book_append_sheet(wb, wsAulas, 'Aulas');
 
+    // Aba de Progresso por Curso
+    const progressSheetData = filteredCourseProgress.map(p => ({
+      'Aluno': p.userName ?? '',
+      'Gerente': p.managerName ?? 'N/A',
+      'Nome do Curso': p.courseName,
+      '% de Conclusão': p.completionPercentage,
+      'Status Final': p.status,
+    }));
+    const wsProgresso = XLSX.utils.json_to_sheet(progressSheetData);
+    XLSX.utils.book_append_sheet(wb, wsProgresso, 'Progresso por Curso');
+
     XLSX.writeFile(wb, `ConxAcademy_Analytics_${new Date().toISOString().split('T')[0]}.xlsx`);
 
     toast({
       title: 'Exportação Concluída',
       description: 'O arquivo XLSX foi baixado.',
     });
-  }, [filteredSessions, filteredLessonViews, toast]);
+  }, [filteredSessions, filteredLessonViews, filteredCourseProgress, toast]);
 
   const selectedUserName = useMemo(() => {
     return allUsers.find(u => u.id === selectedUserId)?.name || "Filtrar por usuário...";

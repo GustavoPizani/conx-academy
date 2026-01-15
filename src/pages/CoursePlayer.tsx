@@ -178,6 +178,8 @@ const CoursePlayer = () => {
   const handleCompleteManual = async () => {
     if (!currentLesson || !user) return;
 
+    await updateWatchTime(true);
+
     if (awardLessonCompletion) {
         await awardLessonCompletion(courseId!, currentLesson.id);
     }
@@ -192,6 +194,9 @@ const CoursePlayer = () => {
     if (!error) {
       setCompletedLessonIds(prev => new Set(prev).add(currentLesson.id));
       toast({ title: "Aula Concluída!" });
+      
+      lessonViewIdRef.current = null; 
+
       if (!isLastLesson) {
         handleLessonChange(currentLessonIndex + 1);
       } else {
@@ -246,8 +251,8 @@ const CoursePlayer = () => {
                           Próxima Aula <FastForward className="ml-2 w-4 h-4" />
                         </Button>
                       ) : (
-                        <Button onClick={() => navigate('/courses')} variant="outline">
-                          Voltar aos Cursos
+                        <Button onClick={() => navigate(`/courses/${courseId}`)} variant="outline">
+                          Voltar ao Curso
                         </Button>
                       )}
                       <Button onClick={handleCompleteManual} variant="ghost" className="text-green-500">
