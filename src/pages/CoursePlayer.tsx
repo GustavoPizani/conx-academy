@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import YouTube, { YouTubeProps } from 'react-youtube'; // <--- PLUGIN NATIVO DO YOUTUBE
-import { Play, CheckCircle, Lock, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
+import { Play, CheckCircle, Lock, ArrowLeft, Loader2, AlertCircle, SkipForward } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { usePoints } from '@/hooks/usePoints';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Interfaces
 interface Lesson {
@@ -40,6 +41,7 @@ const CoursePlayer = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { awardLessonCompletion } = usePoints();
+  const { user } = useAuth();
   
   // States
   const [course, setCourse] = useState<Course | null>(null);
@@ -47,11 +49,15 @@ const CoursePlayer = () => {
   const [currentLessonIndex, setCurrentLessonIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [videoError, setVideoError] = useState(false);
-  const [canComplete, setCanComplete] = useState(false);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
+  const [showNextLessonBtn, setShowNextLessonBtn] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
   // Player Ref
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
+  const lessonViewIdRef = useRef<string | null>(null);
+  const watchTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 1. Fetch Data
   useEffect(() => {
@@ -75,12 +81,11 @@ const CoursePlayer = () => {
       setCourse(courseData);
       setLessons(sortedLessons);
 
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
+      if (user) {
         const { data: progressData } = await supabase
           .from('progress')
           .select('lesson_id')
-          .eq('user_id', currentUser.id)
+          .eq('user_id', user.id)
           .eq('is_completed', true);
           
         if (progressData) {
@@ -92,31 +97,210 @@ const CoursePlayer = () => {
     };
 
     fetchData();
-  }, [courseId, navigate, toast]);
+  }, [courseId, navigate, toast, user]);
+
+  const updateWatchTime = useCallback(async (isFinalUpdate = false) => {
+    if (!playerRef.current || !lessonViewIdRef.current) return;
+
+    try {
+      const currentTime = await playerRef.current.getCurrentTime();
+      if (currentTime > 0) {
+        await supabase
+          .from('lesson_views')
+          .update({ watch_time_seconds: Math.floor(currentTime) })
+          .eq('id', lessonViewIdRef.current);
+        if (isFinalUpdate) {
+          console.log(`Final watch time for lesson view ${lessonViewIdRef.current} is ${Math.floor(currentTime)}s`);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating watch time:", error);
+    }
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (watchTimeIntervalRef.current) {
+      clearInterval(watchTimeIntervalRef.current);
+      watchTimeIntervalRef.current = null;
+    }
+  }, []);
+
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat(); // Ensure no multiple intervals
+    watchTimeIntervalRef.current = setInterval(() => {
+      updateWatchTime();
+    }, 30000); // 30 seconds heartbeat
+  }, [stopHeartbeat, updateWatchTime]);
+
+  const currentLesson = lessons[currentLessonIndex];
+
+  const logLessonView = useCallback(async () => {
+    if (!user || !currentLesson || lessonViewIdRef.current) return;
+
+    const { data, error } = await supabase
+      .from('lesson_views')
+      .insert({
+        user_id: user.id,
+        lesson_id: currentLesson.id,
+        started_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Error logging lesson view:", error);
+    } else if (data) {
+      lessonViewIdRef.current = data.id;
+    }
+  }, [user, currentLesson]);
+
+  // Cleanup on unmount or when lesson changes
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (lessonViewIdRef.current) {
+        updateWatchTime(true);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      stopHeartbeat();
+      if (lessonViewIdRef.current) {
+        updateWatchTime(true);
+      }
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, [stopHeartbeat, updateWatchTime]);
+
+  const updateWatchTime = useCallback(async (isFinalUpdate = false) => {
+    if (!playerRef.current || !lessonViewIdRef.current) return;
+
+    try {
+      const currentTime = await playerRef.current.getCurrentTime();
+      if (currentTime > 0) {
+        await supabase
+          .from('lesson_views')
+          .update({ watch_time_seconds: Math.floor(currentTime) })
+          .eq('id', lessonViewIdRef.current);
+        if (isFinalUpdate) {
+          console.log(`Final watch time for lesson view ${lessonViewIdRef.current} is ${Math.floor(currentTime)}s`);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating watch time:", error);
+    }
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (watchTimeIntervalRef.current) {
+      clearInterval(watchTimeIntervalRef.current);
+      watchTimeIntervalRef.current = null;
+    }
+  }, []);
+
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat(); // Ensure no multiple intervals
+    watchTimeIntervalRef.current = setInterval(() => {
+      updateWatchTime();
+    }, 30000); // 30 seconds heartbeat
+  }, [stopHeartbeat, updateWatchTime]);
+
+  const currentLesson = lessons[currentLessonIndex];
+
+  const logLessonView = useCallback(async () => {
+    if (!user || !currentLesson || lessonViewIdRef.current) return;
+
+    const { data, error } = await supabase
+      .from('lesson_views')
+      .insert({
+        user_id: user.id,
+        lesson_id: currentLesson.id,
+        started_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Error logging lesson view:", error);
+    } else if (data) {
+      lessonViewIdRef.current = data.id;
+    }
+  }, [user, currentLesson]);
+
+  // Cleanup on unmount or when lesson changes
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (lessonViewIdRef.current) {
+        updateWatchTime(true);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      stopHeartbeat();
+      if (lessonViewIdRef.current) {
+        updateWatchTime(true);
+      }
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, [stopHeartbeat, updateWatchTime]);
 
   // 2. Handlers
-  const currentLesson = lessons[currentLessonIndex];
   const isLastLesson = currentLessonIndex === lessons.length - 1;
 
   // Extrair o ID do vídeo atual
   const videoId = currentLesson ? getYouTubeID(currentLesson.video_url) : '';
 
-  const handleLessonChange = (index: number) => {
+  const handleLessonChange = useCallback((index: number) => {
+    if (watchTimeIntervalRef.current) {
+      stopHeartbeat();
+      updateWatchTime(true);
+    }
+    lessonViewIdRef.current = null;
     setVideoError(false);
-    setCanComplete(false);
+    setShowNextLessonBtn(false);
     setCurrentLessonIndex(index);
-  };
+  }, [stopHeartbeat, updateWatchTime]);
 
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     playerRef.current = event.target;
-    // Tentar autoplay
-    event.target.playVideo();
   };
 
+  const cancelRedirect = useCallback(() => {
+    if (redirectTimerRef.current) {
+      clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = null;
+      setIsRedirecting(false);
+      toast({ title: "Redirecionamento cancelado." });
+      document.removeEventListener('click', cancelRedirect);
+      document.removeEventListener('keydown', cancelRedirect);
+    }
+  }, [toast]);
+
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
-    // Estado 0 = Ended (Terminou)
+    // PLAYING
+    if (event.data === 1) {
+      logLessonView();
+      startHeartbeat();
+    }
+    // PAUSED
+    if (event.data === 2) {
+      stopHeartbeat();
+      updateWatchTime();
+    }
+    // ENDED
     if (event.data === 0) {
-      setCanComplete(true);
+      stopHeartbeat();
+      updateWatchTime(true);
+      setShowNextLessonBtn(true);
     }
   };
 
@@ -125,30 +309,28 @@ const CoursePlayer = () => {
     setVideoError(true);
   };
 
-  const handleComplete = async () => {
-    if (!currentLesson) return;
+  const handleCompleteAndAdvance = async () => {
+    if (!currentLesson || !courseId) return;
 
-    if (awardLessonCompletion) {
-        await awardLessonCompletion(courseId!, currentLesson.id);
-    }
+    await awardLessonCompletion(courseId, currentLesson.id);
+    setCompletedLessonIds(prev => new Set(prev).add(currentLesson.id));
+    toast({ title: "Aula Concluída!", className: "bg-green-600 text-white" });
+    setShowNextLessonBtn(false);
 
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) return;
-
-    const { error } = await supabase.from('progress').upsert({
-      user_id: currentUser.id,
-      lesson_id: currentLesson.id,
-      is_completed: true,
-      viewed_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,lesson_id' });
-
-    if (!error) {
-      setCompletedLessonIds(prev => new Set(prev).add(currentLesson.id));
-      toast({ title: "Aula Concluída!", className: "bg-green-600 text-white" });
-      
-      if (!isLastLesson) {
-        handleLessonChange(currentLessonIndex + 1);
-      }
+    if (isLastLesson) {
+      setIsRedirecting(true);
+      toast({
+        title: 'Curso finalizado!',
+        description: 'Você será redirecionado em 3 segundos...',
+      });
+      redirectTimerRef.current = setTimeout(() => {
+        navigate(`/course/${courseId}`);
+      }, 3000);
+      // Listen for user interaction to cancel
+      document.addEventListener('click', cancelRedirect, { once: true });
+      document.addEventListener('keydown', cancelRedirect, { once: true });
+    } else {
+      handleLessonChange(currentLessonIndex + 1);
     }
   };
 
@@ -161,6 +343,7 @@ const CoursePlayer = () => {
       rel: 0,
       modestbranding: 1,
       iv_load_policy: 3,
+      origin: window.location.origin,
     },
   };
 
@@ -223,21 +406,19 @@ const CoursePlayer = () => {
                 <p className="text-zinc-400 text-sm">{currentLesson.description || "Sem descrição."}</p>
               </div>
               
-              <Button 
-                size="lg"
-                onClick={handleComplete}
-                disabled={!canComplete && !completedLessonIds.has(currentLesson.id)}
-                className={cn(
-                  "w-full sm:w-auto transition-all",
-                  canComplete || completedLessonIds.has(currentLesson.id) 
-                    ? "bg-green-600 hover:bg-green-700 text-white" 
-                    : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                )}
-              >
-                {isLastLesson ? "Concluir Curso" : "Próxima Aula"}
-                {completedLessonIds.has(currentLesson.id) ? <CheckCircle className="ml-2 w-4 h-4" /> : <Play className="ml-2 w-4 h-4" />}
-              </Button>
+              {showNextLessonBtn && (
+                <Button size="lg" onClick={handleCompleteAndAdvance} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
+                  {isLastLesson ? "Finalizar Curso" : "Próxima Aula"}
+                  <SkipForward className="ml-2 w-4 h-4" />
+                </Button>
+              )}
             </div>
+            {isRedirecting && (
+              <div className="text-center text-sm text-zinc-400 p-2 bg-zinc-800/50 rounded-md">
+                Curso finalizado! Redirecionando...
+                <p className="text-xs">(Clique em qualquer lugar para cancelar)</p>
+              </div>
+            )}
           </div>
         </main>
 
