@@ -192,8 +192,11 @@ const CoursePlayer = () => {
     if (!error) {
       setCompletedLessonIds(prev => new Set(prev).add(currentLesson.id));
       toast({ title: "Aula Concluída!" });
-      if (!isLastLesson) handleLessonChange(currentLessonIndex + 1);
-      else navigate(`/courses/${courseId}`);
+      if (!isLastLesson) {
+        handleLessonChange(currentLessonIndex + 1);
+      } else {
+        navigate('/courses');
+      }
     }
   };
 
@@ -243,8 +246,8 @@ const CoursePlayer = () => {
                           Próxima Aula <FastForward className="ml-2 w-4 h-4" />
                         </Button>
                       ) : (
-                        <Button onClick={() => navigate(`/courses/${courseId}`)} variant="outline">
-                          Voltar ao Curso
+                        <Button onClick={() => navigate('/courses')} variant="outline">
+                          Voltar aos Cursos
                         </Button>
                       )}
                       <Button onClick={handleCompleteManual} variant="ghost" className="text-green-500">
