@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import YouTube, { YouTubeProps, YouTubePlayer } from 'react-youtube';
-import { Play, CheckCircle, Lock, ArrowLeft, Loader2, AlertCircle, SkipForward } from 'lucide-react';
+import { Play, CheckCircle, Lock, ArrowLeft, Loader2, AlertCircle, SkipForward, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -50,14 +50,14 @@ const CoursePlayer = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [videoError, setVideoError] = useState(false);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set());
-  const [showNextLessonBtn, setShowNextLessonBtn] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [countdown, setCountdown] = useState(5);
   
   // Player Ref
   const playerRef = useRef<YouTubePlayer | null>(null);
   const lessonViewIdRef = useRef<string | null>(null);
   const watchTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 1. Fetch Data
   useEffect(() => {
@@ -170,8 +170,8 @@ const CoursePlayer = () => {
       if (lessonViewIdRef.current) {
         updateWatchTime(true);
       }
-      if (redirectTimerRef.current) {
-        clearTimeout(redirectTimerRef.current);
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
       }
     };
   }, [stopHeartbeat, updateWatchTime]);
@@ -260,30 +260,22 @@ const CoursePlayer = () => {
   const videoId = currentLesson ? getYouTubeID(currentLesson.video_url) : '';
 
   const handleLessonChange = useCallback((index: number) => {
-    if (watchTimeIntervalRef.current) {
-      stopHeartbeat();
-      updateWatchTime(true);
-    }
+    stopHeartbeat();
+    updateWatchTime(true);
     lessonViewIdRef.current = null;
     setVideoError(false);
-    setShowNextLessonBtn(false);
+    setShowOverlay(false);
     setCurrentLessonIndex(index);
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setCountdown(5);
   }, [stopHeartbeat, updateWatchTime]);
 
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     playerRef.current = event.target;
   };
-
-  const cancelRedirect = useCallback(() => {
-    if (redirectTimerRef.current) {
-      clearTimeout(redirectTimerRef.current);
-      redirectTimerRef.current = null;
-      setIsRedirecting(false);
-      toast({ title: "Redirecionamento cancelado." });
-      document.removeEventListener('click', cancelRedirect);
-      document.removeEventListener('keydown', cancelRedirect);
-    }
-  }, [toast]);
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
     // PLAYING
@@ -300,7 +292,19 @@ const CoursePlayer = () => {
     if (event.data === 0) {
       stopHeartbeat();
       updateWatchTime(true);
-      setShowNextLessonBtn(true);
+      setShowOverlay(true);
+
+      if (isLastLesson) {
+        countdownIntervalRef.current = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(countdownIntervalRef.current!);
+              navigate(`/course/${courseId}`);
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     }
   };
 
@@ -314,22 +318,12 @@ const CoursePlayer = () => {
 
     await awardLessonCompletion(courseId, currentLesson.id);
     setCompletedLessonIds(prev => new Set(prev).add(currentLesson.id));
-    toast({ title: "Aula Concluída!", className: "bg-green-600 text-white" });
-    setShowNextLessonBtn(false);
 
     if (isLastLesson) {
-      setIsRedirecting(true);
-      toast({
-        title: 'Curso finalizado!',
-        description: 'Você será redirecionado em 3 segundos...',
-      });
-      redirectTimerRef.current = setTimeout(() => {
-        navigate(`/course/${courseId}`);
-      }, 3000);
-      // Listen for user interaction to cancel
-      document.addEventListener('click', cancelRedirect, { once: true });
-      document.addEventListener('keydown', cancelRedirect, { once: true });
+      toast({ title: "Curso finalizado!", description: "Parabéns por concluir o curso." });
+      navigate(`/course/${courseId}`);
     } else {
+      toast({ title: "Aula Concluída!", className: "bg-green-600 text-white" });
       handleLessonChange(currentLessonIndex + 1);
     }
   };
@@ -373,6 +367,7 @@ const CoursePlayer = () => {
         <main className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden bg-black relative">
           
           <div className="w-full aspect-video bg-zinc-900 relative flex items-center justify-center group">
+            
             {videoError || !videoId ? (
               <div className="text-center p-6 bg-zinc-900 w-full h-full flex flex-col items-center justify-center">
                 <AlertCircle className="w-12 h-12 text-red-500 mb-2" />
@@ -394,31 +389,43 @@ const CoursePlayer = () => {
                 className="w-full h-full absolute inset-0"
               />
             )}
-          </div>
 
-          {/* Controls & Info */}
-          <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold text-white mb-2">
-                  {currentLessonIndex + 1}. {currentLesson.title}
-                </h2>
-                <p className="text-zinc-400 text-sm">{currentLesson.description || "Sem descrição."}</p>
+            {/* Safety Overlay */}
+            <div
+              className={cn(
+                'absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-zinc-950/90 backdrop-blur-sm transition-opacity',
+                showOverlay
+                  ? 'opacity-100 pointer-events-auto animate-in fade-in duration-500'
+                  : 'opacity-0 pointer-events-none'
+              )}
+            >
+              <div className="flex items-center justify-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
+                  <GraduationCap className="w-7 h-7 text-primary-foreground" />
+                </div>
               </div>
-              
-              {showNextLessonBtn && (
-                <Button size="lg" onClick={handleCompleteAndAdvance} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
-                  {isLastLesson ? "Finalizar Curso" : "Próxima Aula"}
+
+              {isLastLesson ? (
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-white">Curso Concluído!</h3>
+                  <p className="text-muted-foreground">Redirecionando em {countdown}...</p>
+                  <Button size="lg" onClick={handleCompleteAndAdvance} className="mt-4 w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
+                    Concluir Agora
+                  </Button>
+                </div>
+              ) : (
+                <Button size="lg" onClick={handleCompleteAndAdvance} className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+                  Continuar: {lessons[currentLessonIndex + 1]?.title}
                   <SkipForward className="ml-2 w-4 h-4" />
                 </Button>
               )}
             </div>
-            {isRedirecting && (
-              <div className="text-center text-sm text-zinc-400 p-2 bg-zinc-800/50 rounded-md">
-                Curso finalizado! Redirecionando...
-                <p className="text-xs">(Clique em qualquer lugar para cancelar)</p>
-              </div>
-            )}
+          </div>
+
+          {/* Controls & Info */}
+          <div className="p-6 space-y-6 max-w-4xl mx-auto w-full">
+            <h2 className="text-2xl font-bold text-white">{currentLessonIndex + 1}. {currentLesson.title}</h2>
+            <p className="text-zinc-400 text-sm -mt-4">{currentLesson.description || "Sem descrição."}</p>
           </div>
         </main>
 
