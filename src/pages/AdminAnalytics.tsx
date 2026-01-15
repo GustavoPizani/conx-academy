@@ -142,7 +142,7 @@ const AdminAnalytics: React.FC = () => {
         const teamId = profile?.team_id;
         const managerName = teamId ? teamToManagerNameMap.get(teamId) : undefined;
         return { ...v, user_name: profile?.name, user_email: profile?.email, lesson_title: lessonsMap.get(v.lesson_id), manager_name: managerName };
-      }));
+      });
       setLessonViews(enrichedViews);
 
     } catch (error: any) {
