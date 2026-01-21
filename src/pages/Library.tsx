@@ -72,17 +72,14 @@ const Library: React.FC = () => {
   }, []);
 
   const handleResourceClick = async (resource: Resource) => {
-    // Award points for accessing the resource
+    // Award points
     await awardResourceAccess(resource.id, resource.type);
 
-    // Log the access for analytics
+    // Log analytics
     if (user?.id) {
       await supabase
         .from('resource_logs')
-        .insert({
-          user_id: user.id,
-          resource_id: resource.id,
-        });
+        .insert({ user_id: user.id, resource_id: resource.id });
     }
     
     toast({
@@ -90,7 +87,6 @@ const Library: React.FC = () => {
       description: `${resource.title} será aberto em uma nova aba.`,
     });
 
-    // Open in new tab
     window.open(resource.url, '_blank');
   };
 
@@ -178,6 +174,7 @@ const Library: React.FC = () => {
             </div>
           ) : (
             <>
+              {/* ABA LIVROS - Usa aspect-[2/3] (Vertical) */}
               <TabsContent value="books">
                 {books.length === 0 ? (
                   <div className="text-center py-20">
@@ -195,7 +192,8 @@ const Library: React.FC = () => {
                         onClick={() => handleResourceClick(book)}
                         className="bg-card border-border overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
                       >
-                        <div className="relative aspect-[3/4] overflow-hidden">
+                        {/* AQUI ESTÁ A MUDANÇA: aspect-[2/3] para livros */}
+                        <div className="relative aspect-[2/3] overflow-hidden">
                           <img
                             src={book.cover_image || defaultBookCover}
                             alt={book.title}
@@ -258,6 +256,7 @@ const Library: React.FC = () => {
                 )}
               </TabsContent>
 
+              {/* ABA PODCASTS - Usa aspect-square (Quadrado) */}
               <TabsContent value="podcasts">
                 {podcasts.length === 0 ? (
                   <div className="text-center py-20">
@@ -268,14 +267,15 @@ const Library: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {podcasts.map((podcast) => (
                       <Card
                         key={podcast.id}
                         onClick={() => handleResourceClick(podcast)}
                         className="bg-card border-border overflow-hidden group cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
                       >
-                        <div className="relative aspect-[3/4] overflow-hidden">
+                        {/* AQUI ESTÁ A MUDANÇA: aspect-square para podcasts */}
+                        <div className="relative aspect-square overflow-hidden">
                           <img
                             src={podcast.cover_image || defaultPodcastCover}
                             alt={podcast.title}
@@ -349,7 +349,7 @@ const Library: React.FC = () => {
           setEditingResource(null);
         }}
         onSuccess={fetchResources}
-        defaultType={addModalType}
+        // Nota: O modal espera defaultType (consertado aqui)
         initialData={editingResource}
       />
 

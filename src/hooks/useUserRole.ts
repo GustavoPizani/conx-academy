@@ -1,42 +1,38 @@
-import { useAuth } from '@/contexts/AuthContext';
-import { UserRole, ROLE_HIERARCHY } from '@/types/auth';
+import { useCallback } from 'react';
+import { useAuth } from "@/contexts/AuthContext";
 
 export const useUserRole = () => {
   const { user } = useAuth();
 
-  const hasRole = (role: UserRole): boolean => {
-    if (!user) return false;
-    return user.role === role;
-  };
+  // 1. Identificação da Role
+  const role = user?.user_metadata?.role || 'student';
 
-  const hasMinRole = (minRole: UserRole): boolean => {
-    if (!user) return false;
-    return ROLE_HIERARCHY[user.role] >= ROLE_HIERARCHY[minRole];
-  };
+  // 2. Verificadores de Cargo (Memoizados para evitar loops)
+  const isAdmin = useCallback(() => role === 'admin', [role]);
+  
+  const isCoordinator = useCallback(() => role === 'coordinator' || role === 'admin', [role]);
+  
+  const isSuperintendent = useCallback(() => role === 'superintendent' || role === 'admin', [role]);
+  
+  const isManager = useCallback(() => role === 'manager' || role === 'admin' || role === 'superintendent', [role]);
 
-  const isAdmin = (): boolean => hasRole('admin');
-  const isCoordinator = (): boolean => hasRole('coordinator');
-  const isSuperintendent = (): boolean => hasRole('superintendent');
-  const isManager = (): boolean => hasRole('manager');
-  const isStudent = (): boolean => hasRole('student');
-
-  const canManageUsers = (): boolean => isAdmin();
-  const canManageContent = (): boolean => isAdmin();
-  const canViewAllRankings = (): boolean => isAdmin() || isCoordinator();
-  const canEditOwnEmail = (): boolean => isAdmin();
+  // 3. Permissões Específicas
+  const canEditOwnEmail = useCallback(() => true, []);
+  const canManageUsers = useCallback(() => role === 'admin', [role]);
+  const canViewAnalytics = useCallback(() => role === 'admin' || role === 'coordinator', [role]);
+  const canCreateContent = useCallback(() => role === 'admin', [role]);
+  const canConfigureSystem = useCallback(() => role === 'admin', [role]);
 
   return {
-    role: user?.role,
-    hasRole,
-    hasMinRole,
+    role,
     isAdmin,
     isCoordinator,
     isSuperintendent,
     isManager,
-    isStudent,
-    canManageUsers,
-    canManageContent,
-    canViewAllRankings,
     canEditOwnEmail,
+    canManageUsers,
+    canViewAnalytics,
+    canCreateContent,
+    canConfigureSystem
   };
 };

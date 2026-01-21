@@ -138,38 +138,38 @@ export function useSession() {
   }, []);
 
   // Setup session on mount
-  useEffect(() => {
-    if (!user) return;
+  // useEffect(() => {
+  //   if (!user) return;
 
-    startSession();
+  //   startSession();
 
-    // Setup heartbeat
-    heartbeatIntervalRef.current = setInterval(updateHeartbeat, SESSION_HEARTBEAT_INTERVAL);
+  //   // Setup heartbeat
+  //   heartbeatIntervalRef.current = setInterval(updateHeartbeat, SESSION_HEARTBEAT_INTERVAL);
 
-    // Handle page unload
-    const handleBeforeUnload = () => {
-      endSession();
-    };
+  //   // Handle page unload
+  //   const handleBeforeUnload = () => {
+  //     endSession();
+  //   };
 
-    // Handle visibility change (tab switching)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        updateHeartbeat();
-      }
-    };
+  //   // Handle visibility change (tab switching)
+  //   const handleVisibilityChange = () => {
+  //     if (document.visibilityState === 'hidden') {
+  //       updateHeartbeat();
+  //     }
+  //   };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+  //   window.addEventListener('beforeunload', handleBeforeUnload);
+  //   document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    return () => {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-      }
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      endSession();
-    };
-  }, [user, startSession, updateHeartbeat, endSession]);
+  //   return () => {
+  //     if (heartbeatIntervalRef.current) {
+  //       clearInterval(heartbeatIntervalRef.current);
+  //     }
+  //     window.removeEventListener('beforeunload', handleBeforeUnload);
+  //     document.removeEventListener('visibilitychange', handleVisibilityChange);
+  //     endSession();
+  //   };
+  // }, [user, startSession, updateHeartbeat, endSession]);
 
   return {
     sessionId: sessionIdRef.current,

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 const ChangePassword: React.FC = () => {
@@ -12,13 +13,18 @@ const ChangePassword: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { updatePassword, user } = useAuth();
+  
+  const { user } = useAuth(); 
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const userName = user?.user_metadata?.name || user?.email || 'Usuário';
+  const firstName = userName.split(' ')[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validação de Tamanho
     if (newPassword.length < 8) {
       toast({
         title: 'Senha muito curta',
@@ -28,6 +34,7 @@ const ChangePassword: React.FC = () => {
       return;
     }
 
+    // Validação de Igualdade
     if (newPassword !== confirmPassword) {
       toast({
         title: 'Senhas não coincidem',
@@ -38,28 +45,49 @@ const ChangePassword: React.FC = () => {
     }
 
     setIsLoading(true);
-    const success = await updatePassword(newPassword);
-    setIsLoading(false);
-
-    if (success) {
-      toast({
-        title: 'Senha alterada!',
-        description: 'Sua senha foi atualizada com sucesso.',
+    try {
+      const { error } = await supabase.auth.updateUser({ 
+        password: newPassword 
       });
-      navigate('/home');
-    } else {
+
+      if (error) throw error;
+
       toast({
-        title: 'Erro',
-        description: 'Não foi possível alterar a senha.',
+        title: 'Sucesso!',
+        description: 'Sua senha foi atualizada. Você será redirecionado.',
+        className: "bg-green-600 text-white border-none"
+      });
+      
+      // Pequeno delay para o usuário ler a mensagem antes de sair
+      setTimeout(() => {
+        navigate('/home');
+      }, 1500);
+
+    } catch (error: any) {
+      console.error(error);
+      
+      let errorTitle = 'Erro ao alterar';
+      let errorDesc = error.message || 'Não foi possível alterar a senha.';
+
+      // TRATAMENTO ESPECÍFICO DO ERRO DE SENHA IGUAL
+      if (error.message?.includes('different from the old password')) {
+        errorTitle = 'Senha Repetida';
+        errorDesc = 'A nova senha não pode ser igual à sua senha atual. Por favor, escolha uma diferente.';
+      }
+
+      toast({
+        title: errorTitle,
+        description: errorDesc,
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-10">
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
             <GraduationCap className="w-7 h-7 text-primary-foreground" />
@@ -79,7 +107,7 @@ const ChangePassword: React.FC = () => {
             Alterar Senha
           </h2>
           <p className="text-muted-foreground text-center mb-8">
-            Olá, {user?.name.split(' ')[0]}! Por favor, crie uma nova senha para sua conta.
+            Olá, <strong>{firstName}</strong>! Defina sua nova senha de acesso.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -127,7 +155,7 @@ const ChangePassword: React.FC = () => {
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   Salvando...
                 </>
               ) : (

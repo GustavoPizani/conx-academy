@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 import { Session, User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,83 +27,59 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Função de limpeza agressiva
-  const clearSession = async () => {
-    console.warn("⚠️ Sessão inválida detectada. Limpando dados...");
-    
-    // 1. Limpa o estado local
+  // Função interna para limpar dados silenciosamente
+  const clearLocalData = () => {
     setSession(null);
     setUser(null);
-    
-    // 2. Limpa o Local Storage (onde o token fantasma vive)
-    localStorage.clear(); 
-    sessionStorage.clear();
-
-    // 3. Garante o logout no Supabase
-    await supabase.auth.signOut();
+    localStorage.clear(); // Remove qualquer lixo de sessão
   };
 
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
       try {
-        setIsLoading(true);
-        
         // 1. Tenta pegar a sessão atual
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
 
         if (error) {
-          throw error;
+          // Se der erro (Token Inválido/Fantasma), apenas limpa e segue a vida
+          console.warn("Sessão inválida na inicialização (Isso é normal se o token expirou). Limpando...");
+          clearLocalData();
+        } else if (data.session) {
+          if (mounted) {
+            setSession(data.session);
+            setUser(data.session.user);
+          }
         }
-
-        if (session) {
-          setSession(session);
-          setUser(session.user);
-        } else {
-          // Se não tem sessão, garante que tudo esteja limpo
-          await clearSession();
-        }
-
-      } catch (error: any) {
-        console.error("Erro na inicialização da Auth:", error);
-        
-        // SE DER O ERRO DO TOKEN FANTASMA, LIMPA TUDO
-        if (
-          error.message?.includes("Refresh Token Not Found") || 
-          error.message?.includes("Invalid Refresh Token") ||
-          error.message?.includes("json") // Erros de parse
-        ) {
-          await clearSession();
-        }
+      } catch (err) {
+        console.error("Erro inesperado na Auth:", err);
+        clearLocalData();
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     initAuth();
 
-    // 2. Escuta mudanças em tempo real
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`Auth event: ${event}`);
-
-      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-        setSession(null);
-        setUser(null);
-        localStorage.clear(); // Limpeza extra por segurança
-      } else if (session) {
+    // 2. Listener para eventos futuros
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
         setSession(session);
-        setUser(session.user);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
+      // 1. Faz o login no Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -111,14 +87,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) throw error;
 
+      // 2. ATUALIZAÇÃO MANUAL (O Pulo do Gato)
+      // Não esperamos o "onAuthStateChange", já definimos o user aqui para destravar a tela
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+      }
+
       return { success: true };
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("Erro no Login:", error);
       
-      // Tratamento específico para credenciais erradas vs erro de sistema
       const message = error.message === "Invalid login credentials" 
         ? "E-mail ou senha incorretos." 
-        : error.message;
+        : "Erro ao conectar. Tente novamente.";
 
       return { success: false, error: message };
     }
@@ -126,14 +108,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = async () => {
     try {
+      // 1. Tenta avisar o Supabase que saiu
       await supabase.auth.signOut();
-      await clearSession(); // Usa nossa função de limpeza
-      toast({
-        title: "Saiu com sucesso",
-        description: "Você foi desconectado.",
-      });
     } catch (error) {
       console.error("Erro ao sair:", error);
+    } finally {
+      // 2. Limpa dados locais (independente de erro no Supabase)
+      clearLocalData();
+      
+      // 3. FORÇA O REDIRECIONAMENTO (O Pulo do Gato)
+      // Usamos window.location.href em vez de navigate.
+      // Isso recarrega a página e joga o usuário para o login limpo.
+      window.location.href = '/login';
     }
   };
 

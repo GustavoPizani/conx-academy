@@ -39,9 +39,15 @@ export const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
 
+  // Tratamento seguro dos dados do usuário
+  // O Supabase guarda o nome e role dentro de 'user_metadata'
+  const userName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário';
+  const userRole = user?.user_metadata?.role || 'student'; // Fallback para aluno se não tiver role
+
   const filteredNavItems = navItems.filter(item => {
     if (!item.roles) return true;
-    return user && item.roles.includes(user.role);
+    // Verifica a role de forma segura
+    return item.roles.includes(userRole);
   });
 
   return (
@@ -101,7 +107,8 @@ export const Sidebar: React.FC = () => {
         >
           <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
             <span className="text-sm font-semibold text-primary">
-              {user?.name.charAt(0).toUpperCase()}
+              {/* Uso seguro do charAt com fallback */}
+              {(userName || 'U').charAt(0).toUpperCase()}
             </span>
           </div>
           <div
@@ -110,9 +117,10 @@ export const Sidebar: React.FC = () => {
               isExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
             )}
           >
-            <p className="text-sm font-medium text-foreground truncate">{user?.name}</p>
+            <p className="text-sm font-medium text-foreground truncate">{userName}</p>
             <p className="text-xs text-muted-foreground">
-              {user?.role && ROLE_LABELS[user.role]}
+              {/* Acesso seguro ao ROLE_LABELS */}
+              {ROLE_LABELS[userRole as keyof typeof ROLE_LABELS] || userRole}
             </p>
           </div>
         </div>

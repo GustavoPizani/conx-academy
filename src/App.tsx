@@ -22,6 +22,7 @@ import CoursePlayer from "@/pages/CoursePlayer";
 import MyList from "@/pages/MyList";
 import RankingConfig from "@/pages/Admin/RankingConfig";
 import AdminAnalytics from "@/pages/AdminAnalytics";
+import ForgotPassword from "@/pages/ForgotPassword"; // NOVO IMPORT
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} /> {/* NOVA ROTA */}
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/setup-admin" element={<SetupAdmin />} />
             

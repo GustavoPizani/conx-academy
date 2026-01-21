@@ -1,141 +1,138 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Upload, Link as LinkIcon } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { Loader2, Upload, Link as LinkIcon, FileText, Video, Headphones } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Resource } from '@/pages/Library';
+
+// Interfaces (Simplificado para evitar imports quebrados)
+interface Resource {
+  id: string;
+  title: string;
+  type: 'book' | 'video' | 'podcast' | 'article';
+  url: string;
+  description?: string;
+  cover_image?: string;
+  author?: string;
+  duration?: string;
+}
 
 interface AddResourceModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  defaultType?: 'book_pdf' | 'podcast_audio';
   initialData?: Resource | null;
 }
 
-const AddResourceModal: React.FC<AddResourceModalProps> = ({ 
-  open, 
-  onClose, 
-  onSuccess,
-  defaultType = 'book_pdf',
-  initialData
-}) => {
+const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSuccess, initialData }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [coverType, setCoverType] = useState<'url' | 'upload'>('url');
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [urlError, setUrlError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    url: '',
-    cover_image: '',
-    type: defaultType as 'book_pdf' | 'podcast_audio',
-  });
+  
+  // Form States
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState<'book' | 'video' | 'podcast' | 'article'>('book');
+  const [url, setUrl] = useState('');
+  const [description, setDescription] = useState('');
+  const [author, setAuthor] = useState('');
+  const [duration, setDuration] = useState('');
+  const [coverImage, setCoverImage] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && initialData) {
-      setFormData({
-        title: initialData.title,
-        url: initialData.url,
-        cover_image: initialData.cover_image || '',
-        type: initialData.type,
-      });
-      setCoverType('url');
+      setTitle(initialData.title);
+      setType(initialData.type);
+      setUrl(initialData.url);
+      setDescription(initialData.description || '');
+      setAuthor(initialData.author || '');
+      setDuration(initialData.duration || '');
+      setCoverImagePreview(initialData.cover_image || null);
     } else if (open && !initialData) {
-      setFormData({
-        title: '',
-        url: '',
-        cover_image: '',
-        type: defaultType,
-      });
-      setCoverType('url');
-      setCoverFile(null);
+      // Reset
+      setTitle('');
+      setType('book');
+      setUrl('');
+      setDescription('');
+      setAuthor('');
+      setDuration('');
+      setCoverImage(null);
+      setCoverImagePreview(null);
     }
-  }, [open, initialData, defaultType]);
+  }, [open, initialData]);
 
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    setFormData({ ...formData, cover_image: url });
-    
-    if (url.includes('canva.com') && !url.match(/\.(png|jpg|jpeg)$/i)) {
-      setUrlError("Link inválido: Este é um link de visualização. Clique com o botão direito na imagem no Canva e escolha 'Copiar endereço da imagem'.");
-    } else {
-      setUrlError(null);
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverImage(file);
+      setCoverImagePreview(URL.createObjectURL(file));
     }
+  };
+
+  const uploadImage = async (file: File) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('resource-covers') // Certifique-se que este bucket existe
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from('resource-covers').getPublicUrl(filePath);
+    return data.publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.title.trim() || !formData.url.trim()) {
-      toast({
-        title: 'Erro',
-        description: 'Título e URL são obrigatórios.',
-        variant: 'destructive',
-      });
+    if (!title.trim() || !url.trim()) {
+      toast({ title: "Erro", description: "Título e URL são obrigatórios.", variant: "destructive" });
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      let coverUrl = formData.cover_image;
+      setIsLoading(true);
+      let publicUrl = initialData?.cover_image || null;
 
-      if (coverType === 'upload' && coverFile) {
-        const fileExt = coverFile.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('course-covers')
-          .upload(filePath, coverFile);
-
-        if (uploadError) throw new Error("Erro no upload. Verifique se a imagem é menor que 2MB.");
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('course-covers')
-          .getPublicUrl(filePath);
-
-        coverUrl = publicUrl;
+      if (coverImage) {
+        try {
+          publicUrl = await uploadImage(coverImage);
+        } catch (error) {
+          console.error("Erro upload imagem:", error);
+          toast({ title: "Aviso", description: "Erro ao subir imagem. Salvando sem capa." });
+        }
       }
 
-      const payload: any = {
-        title: formData.title.trim(),
-        url: formData.url.trim(),
-        cover_image: coverUrl || null,
-        type: formData.type,
+      const payload = {
+        title,
+        type,
+        url,
+        description,
+        author,
+        duration,
+        cover_image: publicUrl
       };
 
       if (initialData?.id) {
-        payload.id = initialData.id;
+        const { error } = await supabase.from('library_resources').update(payload).eq('id', initialData.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('library_resources').insert(payload);
+        if (error) throw error;
       }
 
-      const { error } = await supabase
-        .from('resources')
-        .upsert(payload);
-
-      if (error) throw error;
-
-      toast({
-        title: initialData ? 'Recurso atualizado!' : 'Recurso criado!',
-        description: `O ${formData.type === 'book_pdf' ? 'livro' : 'podcast'} foi salvo com sucesso.`,
-      });
-
+      toast({ title: "Sucesso!", description: "Recurso salvo na biblioteca." });
       onSuccess();
       onClose();
 
     } catch (error: any) {
-      console.error('Error saving resource:', error);
-      toast({
-        title: 'Erro ao salvar',
-        description: error.message,
-        variant: 'destructive',
-      });
+      console.error(error);
+      toast({ title: "Erro", description: "Falha ao salvar recurso.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -143,105 +140,70 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-foreground">
-            {initialData ? 'Editar' : 'Adicionar'} {formData.type === 'book_pdf' ? 'Livro' : 'Podcast'}
-          </DialogTitle>
+          <DialogTitle>{initialData ? 'Editar Recurso' : 'Adicionar Novo Recurso'}</DialogTitle>
+          {/* AQUI ESTÁ A CORREÇÃO DO AVISO: Adicionamos a Description */}
+          <DialogDescription>
+            Preencha os detalhes do material (Livro, Vídeo, Podcast ou Artigo) para adicionar à biblioteca.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="type">Tipo</Label>
-            <Select
-              value={formData.type}
-              onValueChange={(value: 'book_pdf' | 'podcast_audio') => 
-                setFormData({ ...formData, type: value })
-              }
-            >
-              <SelectTrigger className="bg-surface border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="book_pdf">Livro (PDF)</SelectItem>
-                <SelectItem value="podcast_audio">Podcast (Áudio)</SelectItem>
-              </SelectContent>
-            </Select>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select value={type} onValueChange={(v: any) => setType(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="book"><div className="flex items-center gap-2"><FileText className="w-4 h-4"/> Livro</div></SelectItem>
+                  <SelectItem value="video"><div className="flex items-center gap-2"><Video className="w-4 h-4"/> Vídeo</div></SelectItem>
+                  <SelectItem value="podcast"><div className="flex items-center gap-2"><Headphones className="w-4 h-4"/> Podcast</div></SelectItem>
+                  <SelectItem value="article"><div className="flex items-center gap-2"><LinkIcon className="w-4 h-4"/> Artigo</div></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Capa</Label>
+              <Input type="file" accept="image/*" onChange={handleImageChange} />
+            </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="title">Título *</Label>
-            <Input
-              id="title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="bg-surface border-border"
-              placeholder={formData.type === 'book_pdf' ? 'Nome do livro' : 'Nome do podcast'}
-              required
-            />
+            <Input id="title" value={title} onChange={e => setTitle(e.target.value)} required />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="url">URL *</Label>
-            <Input
-              id="url"
-              value={formData.url}
-              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-              className="bg-surface border-border"
-              placeholder={formData.type === 'book_pdf' ? 'Link do Google Drive' : 'Link do Spotify/áudio'}
-              required
-            />
+            <Label htmlFor="url">Link / URL *</Label>
+            <Input id="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." required />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             <div className="space-y-2">
+               <Label htmlFor="author">Autor/Criador</Label>
+               <Input id="author" value={author} onChange={e => setAuthor(e.target.value)} />
+             </div>
+             <div className="space-y-2">
+               <Label htmlFor="duration">Duração/Páginas</Label>
+               <Input id="duration" value={duration} onChange={e => setDuration(e.target.value)} placeholder="Ex: 1h 30m ou 200 pág" />
+             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Imagem de Capa</Label>
-            <Tabs value={coverType} onValueChange={(v) => setCoverType(v as 'url' | 'upload')} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-surface">
-                <TabsTrigger value="url" className="gap-2"><LinkIcon className="w-4 h-4"/> URL</TabsTrigger>
-                <TabsTrigger value="upload" className="gap-2"><Upload className="w-4 h-4"/> Upload</TabsTrigger>
-              </TabsList>
-              <TabsContent value="url" className="mt-2">
-                <Input
-                  id="cover_image"
-                  value={formData.cover_image}
-                  onChange={handleUrlChange}
-                  className={`bg-surface border-border ${urlError ? 'border-red-500' : ''}`}
-                  placeholder="https://..."
-                />
-                {urlError && <p className="text-xs text-red-500 mt-1">{urlError}</p>}
-              </TabsContent>
-              <TabsContent value="upload" className="mt-2">
-                <div className="flex items-center justify-center w-full">
-                  <label htmlFor="resource-file" className="flex flex-col items-center justify-center w-full h-32 border-2 border-border border-dashed rounded-lg cursor-pointer bg-surface hover:bg-surface-hover">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Upload className="w-8 h-8 mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground"><span className="font-semibold">Clique para enviar</span></p>
-                    </div>
-                    <input id="resource-file" type="file" className="hidden" accept="image/*" onChange={(e) => {
-                      if (e.target.files?.[0]) setCoverFile(e.target.files[0]);
-                    }} />
-                  </label>
-                </div>
-                {coverFile && <p className="text-sm text-primary mt-2">Arquivo: {coverFile.name}</p>}
-              </TabsContent>
-            </Tabs>
+            <Label htmlFor="desc">Descrição</Label>
+            <Textarea id="desc" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}
             </Button>
-            <Button type="submit" variant="netflix" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                initialData ? 'Salvar' : 'Adicionar'
-              )}
-            </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
