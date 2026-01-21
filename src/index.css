@@ -164,3 +164,34 @@
     }
   }
 }
+
+/* --- Personalização da Barra de Rolagem (Scrollbar) --- */
+
+/* 1. Para Firefox (Padrão moderno) */
+html {
+  scrollbar-width: thin; /* Deixa a barra mais fina e elegante */
+  scrollbar-color: #f97316 #1a1a1a; /* Cor do "polegar" (thumb) e do fundo (track) */
+}
+
+/* 2. Para Chrome, Edge, Safari e outros WebKit */
+*::-webkit-scrollbar {
+  width: 12px;               /* Largura da barra vertical */
+  height: 12px;              /* Altura da barra horizontal */
+}
+
+/* Fundo da barra (Track) */
+*::-webkit-scrollbar-track {
+  background: black;         /* Fundo preto conforme solicitado */
+}
+
+/* Parte móvel da barra (Thumb) */
+*::-webkit-scrollbar-thumb {
+  background-color: #f97316; /* Cor laranja (usei um tom vibrante padrão) */
+  border-radius: 20px;       /* Arredondamento das bordas */
+  border: 3px solid black;   /* Cria uma borda preta ao redor do laranja para dar um efeito de "suspenso" */
+}
+
+/* Efeito ao passar o mouse */
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #ea580c; /* Um laranja levemente mais escuro ao interagir */
+}

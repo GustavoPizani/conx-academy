@@ -2,10 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Loader2 } from "lucide-react";
+
+// Pages
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Home";
 import Rankings from "@/pages/Rankings";
@@ -36,13 +38,14 @@ const App = () => (
       <AuthProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        {/* AQUI ESTÁ A CORREÇÃO DOS AVISOS: future flags */}
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/change-password" element={<ChangePassword />} />
             <Route path="/setup-admin" element={<SetupAdmin />} />
             
-            {/* Player Route (Outside MainLayout) */}
+            {/* Player Route */}
             <Route path="/player/:courseId" element={
               <ProtectedRoute>
                 <CoursePlayer />
@@ -63,7 +66,7 @@ const App = () => (
             </Route>
 
             {/* Redirects */}
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

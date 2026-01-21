@@ -11,11 +11,13 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading } = useAuth();
+  const [loading, setLoading] = useState(false);
+  
+  const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email.trim() || !password.trim()) {
@@ -27,26 +29,34 @@ const Login: React.FC = () => {
       return;
     }
 
-    const result = await login(email.trim(), password);
-    
-    if (result.success) {
-      toast({
-        title: 'Bem-vindo!',
-        description: 'Login realizado com sucesso.',
-      });
-      navigate('/home');
-    } else {
+    try {
+      setLoading(true);
+      const result = await login(email.trim(), password);
+      
+      if (result.success) {
+        toast({
+          title: 'Bem-vindo!',
+          description: 'Login realizado com sucesso.',
+        });
+        navigate('/home');
+      } else {
+        throw new Error(result.error || "Falha ao entrar");
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
       toast({
         title: 'Erro no login',
-        description: result.error,
+        description: error.message || "Verifique suas credenciais.",
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Left side - Branding */}
+      {/* Lado Esquerdo - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-background" />
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZjY2MDAiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40" />
@@ -60,29 +70,27 @@ const Login: React.FC = () => {
           </div>
           
           <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
-            Plataforma oficial de treinamento e aprendizado da CONX Vendas pra corretores.                
-            Aprenda, conquiste pontos e suba no ranking.
+            Plataforma oficial de treinamento e aprendizado da CONX Vendas pra corretores.
           </p>
         </div>
       </div>
 
-      {/* Right side - Login Form */}
+      {/* Lado Direito - Formulário */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex flex-col items-center justify-center mb-10">
             <img src="/Conxlogologin.png" alt="Conx" className="h-8 w-auto object-contain" />
-            <h2 className="font-display text-2xl tracking-wider text-foreground mt-1">ACADEMY</h2>
           </div>
 
           <div className="text-center lg:text-left mb-8">
             <h2 className="text-3xl font-bold text-foreground">Entrar</h2>
             <p className="text-muted-foreground mt-2">
-              Acesse sua conta para continuar aprendendo
+              Acesse sua conta para continuar
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">E-mail</Label>
               <Input
@@ -93,6 +101,7 @@ const Login: React.FC = () => {
                 placeholder="seu@email.com"
                 className="h-12 bg-surface border-border focus:border-primary"
                 required
+                autoComplete="email" 
               />
             </div>
 
@@ -107,6 +116,7 @@ const Login: React.FC = () => {
                   placeholder="••••••••"
                   className="h-12 bg-surface border-border focus:border-primary pr-12"
                   required
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -123,11 +133,11 @@ const Login: React.FC = () => {
               variant="netflix"
               size="lg"
               className="w-full"
-              disabled={isLoading}
+              disabled={loading}
             >
-              {isLoading ? (
+              {loading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   Entrando...
                 </>
               ) : (
@@ -142,13 +152,6 @@ const Login: React.FC = () => {
               Recuperar acesso
             </a>
           </p>
-
-          {/* Demo credentials hint */}
-          <div className="mt-8 p-4 bg-surface rounded-lg border border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              <span className="font-semibold text-primary">Primeiro acesso?</span> Entre em contato com o administrador para receber suas credenciais.
-            </p>
-          </div>
         </div>
       </div>
     </div>

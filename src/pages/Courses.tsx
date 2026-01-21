@@ -66,7 +66,6 @@ const Courses: React.FC = () => {
       setIsLoading(true);
       if (!user) return;
       
-      // 1. Busca os cursos e lições
       const { data, error } = await supabase
         .from('courses')
         .select(`
@@ -76,38 +75,29 @@ const Courses: React.FC = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching courses:', error);
         throw error;
       }
 
-      // 2. Busca o progresso do usuário
       const { data: progressData } = await supabase
-        .from('progress')
+        .from('lesson_progress')
         .select('lesson_id')
         .eq('user_id', user.id)
         .eq('is_completed', true);
       
-      const completedLessonIds = new Set(progressData?.map((p: any) => p.lesson_id) || []);
+      const completedLessonIds = new Set(progressData?.map(p => p.lesson_id) || []);
 
-      // 3. Processa os dados (CORREÇÃO AQUI)
       const coursesWithProgress: Course[] = (data || []).map((course: any) => {
         const lessons = course.lessons || [];
         const totalLessons = lessons.length;
-
-        // Cálculo de duração: Prioriza o campo do banco, senão soma as aulas
         const dbDuration = course.duration || course.total_duration;
         const totalDuration = dbDuration || lessons.reduce((acc: number, l: any) => acc + (l.duration || 0), 0);
-
-        // Contagem de aulas concluídas
         const completedLessonsCount = lessons.filter((l: any) => completedLessonIds.has(l.id)).length;
-        
-        // Cálculo da porcentagem (Aqui estava o erro: completedLessons vs completedLessonsCount)
         const progress = totalLessons > 0 ? Math.round((completedLessonsCount / totalLessons) * 100) : 0;
         
         return {
           ...course,
           lesson_count: totalLessons,
-          total_duration: totalDuration || 0, // Garante que não é NaN
+          total_duration: totalDuration || 0,
           progress,
         };
       });
@@ -130,7 +120,7 @@ const Courses: React.FC = () => {
   }, [user]);
 
   const formatDuration = (minutes: number) => {
-    const safeMinutes = minutes || 0; // Proteção contra NaN
+    const safeMinutes = minutes || 0;
     const hours = Math.floor(safeMinutes / 60);
     const mins = safeMinutes % 60;
     if (hours > 0) {
@@ -139,26 +129,57 @@ const Courses: React.FC = () => {
     return `${mins}min`;
   };
 
+  // --- FUNÇÃO ATUALIZADA PARA DELETAR IMAGEM ---
   const handleDeleteCourse = async () => {
     if (!courseToDelete) return;
 
-    const { error } = await supabase.from('courses').delete().eq('id', courseToDelete);
+    try {
+      // 1. Encontrar o curso para pegar a URL da imagem antes de deletar
+      const course = courses.find(c => c.id === courseToDelete);
+      
+      if (course?.cover_image) {
+        // A URL geralmente é algo como: .../storage/v1/object/public/course-covers/nome-arquivo.jpg
+        // Pegamos a última parte (nome do arquivo)
+        const fileName = course.cover_image.split('/').pop();
+        
+        if (fileName) {
+          console.log("Tentando remover imagem:", fileName);
+          const { error: storageError } = await supabase.storage
+            .from('course-covers')
+            .remove([fileName]);
+          
+          if (storageError) {
+            console.warn("Aviso: Não foi possível deletar a imagem do Storage.", storageError);
+            // Não paramos o erro aqui, pois queremos deletar o curso mesmo se a imagem falhar
+          } else {
+            console.log("Imagem removida com sucesso.");
+          }
+        }
+      }
 
-    if (error) {
+      // 2. Deletar o registro do banco de dados (Isso deleta as aulas em cascata se configurado, ou precisamos deletar manual)
+      // Nota: Se você não configurou "ON DELETE CASCADE" no banco, as aulas podem ficar órfãs.
+      // O Supabase geralmente lida bem se configurado, mas vamos garantir deletar o curso.
+      const { error } = await supabase.from('courses').delete().eq('id', courseToDelete);
+
+      if (error) throw error;
+
+      setCourses((prev) => prev.filter((c) => c.id !== courseToDelete));
+      toast({
+        title: 'Curso excluído',
+        description: 'O curso e sua imagem foram removidos.',
+      });
+
+    } catch (error: any) {
       console.error('Error deleting course:', error);
       toast({
         title: 'Erro ao excluir',
         description: 'Não foi possível excluir o curso. Tente novamente.',
         variant: 'destructive',
       });
-    } else {
-      setCourses((prev) => prev.filter((c) => c.id !== courseToDelete));
-      toast({
-        title: 'Curso excluído',
-        description: 'O curso foi removido com sucesso.',
-      });
+    } finally {
+      setCourseToDelete(null);
     }
-    setCourseToDelete(null);
   };
 
   const handleEditCourse = (course: Course) => {
@@ -340,7 +361,7 @@ const Courses: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Isso excluirá permanentemente o curso.
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente o curso e sua imagem de capa.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

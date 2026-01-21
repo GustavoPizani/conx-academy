@@ -1,222 +1,145 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from '@/integrations/supabase/client';
-import { UserRole } from '@/types/auth';
-
-interface UserProfile {
-  id: string;
-  email: string;
-  name: string;
-  role: UserRole;
-  teamId?: string;
-  teamName?: string;
-  points: number;
-  isFirstLogin: boolean;
-  avatarUrl?: string;
-}
+import { Session, User } from "@supabase/supabase-js";
+import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
-  user: UserProfile | null;
   session: Session | null;
-  isAuthenticated: boolean;
+  user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-  updatePassword: (newPassword: string) => Promise<boolean>;
-  refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  session: null,
+  user: null,
+  isLoading: true,
+  login: async () => ({ success: false }),
+  logout: async () => {},
+});
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserProfile | null>(null);
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  const fetchUserProfile = async (userId: string, userEmail?: string): Promise<UserProfile | null> => {
-    try {
-      // Fetch profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*, teams!team_id(name)')
-        .eq('id', userId)
-        .maybeSingle();
+  // Função de limpeza agressiva
+  const clearSession = async () => {
+    console.warn("⚠️ Sessão inválida detectada. Limpando dados...");
+    
+    // 1. Limpa o estado local
+    setSession(null);
+    setUser(null);
+    
+    // 2. Limpa o Local Storage (onde o token fantasma vive)
+    localStorage.clear(); 
+    sessionStorage.clear();
 
-      if (profileError) {
-        console.error('Error fetching profile:', profileError);
-      }
+    // 3. Garante o logout no Supabase
+    await supabase.auth.signOut();
+  };
 
-      // Se não há perfil mas temos sessão válida, criar um perfil fallback
-      // Isso acontece quando o trigger não foi executado para usuários antigos
-      if (!profile) {
-        console.warn('Profile not found for user, this may indicate sync issue. User ID:', userId);
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        setIsLoading(true);
         
-        // Retornar perfil fallback para evitar loop infinito
-        // O trigger de backfill deveria ter corrigido isso, mas vamos ser resilientes
-        return {
-          id: userId,
-          email: userEmail || 'unknown@email.com',
-          name: userEmail?.split('@')[0] || 'Usuário',
-          role: 'student' as UserRole,
-          teamId: undefined,
-          teamName: undefined,
-          points: 0,
-          isFirstLogin: true,
-          avatarUrl: undefined,
-        };
+        // 1. Tenta pegar a sessão atual
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          throw error;
+        }
+
+        if (session) {
+          setSession(session);
+          setUser(session.user);
+        } else {
+          // Se não tem sessão, garante que tudo esteja limpo
+          await clearSession();
+        }
+
+      } catch (error: any) {
+        console.error("Erro na inicialização da Auth:", error);
+        
+        // SE DER O ERRO DO TOKEN FANTASMA, LIMPA TUDO
+        if (
+          error.message?.includes("Refresh Token Not Found") || 
+          error.message?.includes("Invalid Refresh Token") ||
+          error.message?.includes("json") // Erros de parse
+        ) {
+          await clearSession();
+        }
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      // Fetch role
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
+    initAuth();
 
-      if (roleError) {
-        console.error('Error fetching role:', roleError);
+    // 2. Escuta mudanças em tempo real
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`Auth event: ${event}`);
+
+      if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        setSession(null);
+        setUser(null);
+        localStorage.clear(); // Limpeza extra por segurança
+      } else if (session) {
+        setSession(session);
+        setUser(session.user);
       }
+      
+      setIsLoading(false);
+    });
 
-      return {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        role: (roleData?.role as UserRole) || 'student',
-        teamId: profile.team_id || undefined,
-        teamName: profile.teams?.name || undefined,
-        points: profile.points || 0,
-        isFirstLogin: profile.is_first_login,
-        avatarUrl: profile.avatar_url || undefined,
-      };
-    } catch (error) {
-      console.error('Error in fetchUserProfile:', error);
-      return null;
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("Login error:", error);
+      
+      // Tratamento específico para credenciais erradas vs erro de sistema
+      const message = error.message === "Invalid login credentials" 
+        ? "E-mail ou senha incorretos." 
+        : error.message;
+
+      return { success: false, error: message };
     }
   };
 
-  const refreshProfile = useCallback(async () => {
-    if (session?.user?.id) {
-      const profile = await fetchUserProfile(session.user.id);
-      if (profile) {
-        setUser(profile);
-      }
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      await clearSession(); // Usa nossa função de limpeza
+      toast({
+        title: "Saiu com sucesso",
+        description: "Você foi desconectado.",
+      });
+    } catch (error) {
+      console.error("Erro ao sair:", error);
     }
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    // First, check for an existing session on initial load.
-    const checkSession = async () => {
-      const { data: { session: existingSession } } = await supabase.auth.getSession();
-
-      if (existingSession?.user) {
-        const profile = await fetchUserProfile(existingSession.user.id, existingSession.user.email);
-        setUser(profile);
-        setSession(existingSession);
-      }
-      // We are done with the initial check, so we can stop loading.
-      setIsLoading(false);
-    };
-
-    checkSession();
-
-    // Then, set up a listener for any subsequent auth state changes.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        if (newSession?.user) {
-          const profile = await fetchUserProfile(newSession.user.id, newSession.user.email);
-          setUser(profile);
-          setSession(newSession);
-        } else {
-          setUser(null);
-          setSession(null);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const login = useCallback(async (email: string, password: string) => {
-    setIsLoading(true);
-    
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    if (error) {
-      setIsLoading(false);
-      if (error.message.includes('Invalid login credentials')) {
-        return { success: false, error: 'E-mail ou senha incorretos' };
-      }
-      return { success: false, error: error.message };
-    }
-    
-    if (data.session) {
-      const profile = await fetchUserProfile(data.session.user.id, data.session.user.email);
-      setUser(profile);
-      setSession(data.session);
-    }
-    
-    setIsLoading(false);
-    return { success: true };
-  }, []);
-
-  const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-  }, []);
-
-  const updatePassword = useCallback(async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
-    if (error) {
-      console.error('Error updating password:', error);
-      return false;
-    }
-
-    // Update is_first_login to false
-    if (user?.id) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ is_first_login: false })
-        .eq('id', user.id);
-
-      if (profileError) {
-        console.error('Error updating profile:', profileError);
-      }
-
-      setUser(prev => prev ? { ...prev, isFirstLogin: false } : null);
-    }
-
-    return true;
-  }, [user?.id]);
+  };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        isAuthenticated: !!session,
-        isLoading,
-        login,
-        logout,
-        updatePassword,
-        refreshProfile,
-      }}
-    >
+    <AuthContext.Provider value={{ session, user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };
