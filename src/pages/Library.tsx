@@ -9,6 +9,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { usePoints } from '@/hooks/usePoints';
 import AddResourceModal from '@/components/admin/AddResourceModal';
+import BookReader from '@/components/library/BookReader';
 import { useFavorites } from '@/hooks/useFavorites';
 import {
   DropdownMenu,
@@ -48,6 +49,8 @@ const Library: React.FC = () => {
   const [activeTab, setActiveTab] = useState('books');
   const [resourceToDelete, setResourceToDelete] = useState<string | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [readerOpen, setReaderOpen] = useState(false);
+  const [currentBook, setCurrentBook] = useState<{url: string, title: string} | null>(null);
 
   const fetchResources = async () => {
     setIsLoading(true);
@@ -72,22 +75,28 @@ const Library: React.FC = () => {
   }, []);
 
   const handleResourceClick = async (resource: Resource) => {
-    // Award points
+    // 1. Dar pontos e logar (Mantém igual)
     await awardResourceAccess(resource.id, resource.type);
 
-    // Log analytics
     if (user?.id) {
       await supabase
         .from('resource_logs')
         .insert({ user_id: user.id, resource_id: resource.id });
     }
     
-    toast({
-      title: resource.type === 'book_pdf' ? 'Abrindo livro...' : 'Abrindo podcast...',
-      description: `${resource.title} será aberto em uma nova aba.`,
-    });
-
-    window.open(resource.url, '_blank');
+    // 2. Decisão de Abertura
+    if (resource.type === 'book_pdf') {
+      // Se for PDF do Supabase (ou link direto acessível), abre no Leitor
+      setCurrentBook({ url: resource.url, title: resource.title });
+      setReaderOpen(true);
+    } else {
+      // Se for Podcast ou link externo, mantém comportamento antigo
+      toast({
+        title: 'Abrindo...',
+        description: 'Redirecionando para o conteúdo.',
+      });
+      window.open(resource.url, '_blank');
+    }
   };
 
   const handleDeleteResource = async () => {
@@ -369,6 +378,15 @@ const Library: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {currentBook && (
+        <BookReader 
+          isOpen={readerOpen} 
+          onClose={() => setReaderOpen(false)} 
+          pdfUrl={currentBook.url}
+          title={currentBook.title}
+        />
+      )}
     </div>
   );
 };

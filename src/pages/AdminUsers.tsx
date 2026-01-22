@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Search, Edit, Trash2, Loader2 } from 'lucide-react';
+import { Users, Plus, Search, Edit, Trash2, Loader2, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { ROLE_LABELS, UserRole } from '@/types/auth';
 import AddUserModal from '@/components/admin/AddUserModal';
+import BatchUserUploadModal from '@/components/admin/BatchUserUploadModal';
 
 interface UserWithRole {
   id: string;
@@ -31,6 +32,7 @@ const AdminUsers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
+  const [showBatchModal, setShowBatchModal] = useState(false);
 
   // Função estável de busca
   const fetchUsers = useCallback(async () => {
@@ -125,9 +127,17 @@ const AdminUsers: React.FC = () => {
             </div>
             <p className="text-muted-foreground">Gestão completa de usuários.</p>
           </div>
-          <Button variant="netflix" onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4" /> Adicionar
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3">
+              <Button variant="outline" onClick={() => setShowBatchModal(true)} className="border-dashed">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Múltiplos Cadastros
+              </Button>
+
+              <Button variant="netflix" onClick={() => setShowAddModal(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Usuário
+              </Button>
+          </div>
         </div>
 
         <div className="relative mb-6">
@@ -162,6 +172,11 @@ const AdminUsers: React.FC = () => {
         </Card>
       </div>
       <AddUserModal open={showAddModal} onClose={() => { setShowAddModal(false); setEditingUser(null); }} onSuccess={fetchUsers} initialData={editingUser} />
+      <BatchUserUploadModal 
+          open={showBatchModal}
+          onClose={() => setShowBatchModal(false)}
+          onSuccess={fetchUsers}
+      />
     </div>
   );
 };

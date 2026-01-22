@@ -1,25 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { Loader2, Upload, Link as LinkIcon, FileText, Video, Headphones } from 'lucide-react';
+import { Loader2, Upload, Link as LinkIcon, FileText, Headphones, Image as ImageIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-// Interfaces (Simplificado para evitar imports quebrados)
 interface Resource {
   id: string;
   title: string;
-  type: 'book' | 'video' | 'podcast' | 'article';
+  type: 'book_pdf' | 'podcast_audio';
   url: string;
-  description?: string;
   cover_image?: string;
-  author?: string;
-  duration?: string;
 }
 
 interface AddResourceModalProps {
@@ -27,112 +21,155 @@ interface AddResourceModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialData?: Resource | null;
+  defaultType?: 'book_pdf' | 'podcast_audio';
 }
 
-const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSuccess, initialData }) => {
+const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSuccess, initialData, defaultType }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
-  // Form States
+  // Estados do Formulário
   const [title, setTitle] = useState('');
-  const [type, setType] = useState<'book' | 'video' | 'podcast' | 'article'>('book');
-  const [url, setUrl] = useState('');
-  const [description, setDescription] = useState('');
-  const [author, setAuthor] = useState('');
-  const [duration, setDuration] = useState('');
+  const [type, setType] = useState<'book_pdf' | 'podcast_audio'>('book_pdf');
+  const [url, setUrl] = useState(''); 
+  
+  // Estados de Upload
   const [coverImage, setCoverImage] = useState<File | null>(null);
-  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [bookFile, setBookFile] = useState<File | null>(null); 
 
   useEffect(() => {
-    if (open && initialData) {
-      setTitle(initialData.title);
-      setType(initialData.type);
-      setUrl(initialData.url);
-      setDescription(initialData.description || '');
-      setAuthor(initialData.author || '');
-      setDuration(initialData.duration || '');
-      setCoverImagePreview(initialData.cover_image || null);
-    } else if (open && !initialData) {
-      // Reset
-      setTitle('');
-      setType('book');
-      setUrl('');
-      setDescription('');
-      setAuthor('');
-      setDuration('');
-      setCoverImage(null);
-      setCoverImagePreview(null);
+    if (open) {
+      if (initialData) {
+        setTitle(initialData.title || '');
+        setType(initialData.type || 'book_pdf');
+        setUrl(initialData.url || '');
+        setCoverPreview(initialData.cover_image || null);
+      } else {
+        setTitle('');
+        setType(defaultType || 'book_pdf');
+        setUrl('');
+        setCoverImage(null);
+        setCoverPreview(null);
+        setBookFile(null);
+      }
     }
-  }, [open, initialData]);
+  }, [open, initialData, defaultType]);
+
+  const uploadToStorage = async (file: File, folder: 'covers' | 'pdfs') => {
+    const fileExt = file.name.split('.').pop();
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const fileName = `${folder}/${Date.now()}_${sanitizedName}.${fileExt}`;
+
+    console.log(`Iniciando upload de ${folder}:`, fileName);
+
+    const { error: uploadError } = await supabase.storage
+      .from('library-files')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error(`Erro detalhado upload ${folder}:`, uploadError);
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage.from('library-files').getPublicUrl(fileName);
+    return data.publicUrl;
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setCoverImage(file);
-      setCoverImagePreview(URL.createObjectURL(file));
+      setCoverPreview(URL.createObjectURL(file));
     }
-  };
-
-  const uploadImage = async (file: File) => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('resource-covers') // Certifique-se que este bucket existe
-      .upload(filePath, file);
-
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage.from('resource-covers').getPublicUrl(filePath);
-    return data.publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !url.trim()) {
-      toast({ title: "Erro", description: "Título e URL são obrigatórios.", variant: "destructive" });
+    
+    if (!title.trim()) {
+      toast({ title: "Erro", description: "O título é obrigatório.", variant: "destructive" });
       return;
+    }
+
+    if (type === 'book_pdf' && !bookFile && !url.trim()) {
+        toast({ title: "Erro", description: "Selecione um arquivo PDF.", variant: "destructive" });
+        return;
+    }
+    if (type === 'podcast_audio' && !url.trim()) {
+        toast({ title: "Erro", description: "O Link do Spotify é obrigatório.", variant: "destructive" });
+        return;
     }
 
     try {
       setIsLoading(true);
-      let publicUrl = initialData?.cover_image || null;
+      let finalCoverUrl = initialData?.cover_image || null;
+      let finalResourceUrl = url;
 
+      // 1. Upload da Capa
       if (coverImage) {
         try {
-          publicUrl = await uploadImage(coverImage);
-        } catch (error) {
-          console.error("Erro upload imagem:", error);
-          toast({ title: "Aviso", description: "Erro ao subir imagem. Salvando sem capa." });
+          finalCoverUrl = await uploadToStorage(coverImage, 'covers');
+        } catch (error: any) {
+          console.error("Erro capa:", error);
+          toast({ title: "Erro na Capa", description: "Falha ao subir imagem. Verifique permissões.", variant: "destructive" });
         }
       }
 
+      // 2. Upload do PDF
+      if (type === 'book_pdf' && bookFile) {
+        try {
+          finalResourceUrl = await uploadToStorage(bookFile, 'pdfs');
+        } catch (error: any) {
+          console.error("Erro PDF:", error);
+          toast({ 
+            title: "Erro no Upload do PDF", 
+            description: "Falha ao subir arquivo. Verifique o console.", 
+            variant: "destructive" 
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // 3. Salvar no Banco
+      // CORREÇÃO: Removemos author, duration e description pois não existem no banco
       const payload = {
         title,
         type,
-        url,
-        description,
-        author,
-        duration,
-        cover_image: publicUrl
+        url: finalResourceUrl,
+        cover_image: finalCoverUrl
       };
 
       if (initialData?.id) {
-        const { error } = await supabase.from('library_resources').update(payload).eq('id', initialData.id);
+        const { error } = await supabase.from('resources').update(payload).eq('id', initialData.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('library_resources').insert(payload);
+        const { error } = await supabase.from('resources').insert(payload);
         if (error) throw error;
       }
 
-      toast({ title: "Sucesso!", description: "Recurso salvo na biblioteca." });
+      toast({ title: "Sucesso!", description: "Item salvo na biblioteca." });
       onSuccess();
       onClose();
 
     } catch (error: any) {
-      console.error(error);
-      toast({ title: "Erro", description: "Falha ao salvar recurso.", variant: "destructive" });
+      console.error("Erro ao salvar:", JSON.stringify(error, null, 2));
+      
+      // Tratamento de erro amigável
+      let msg = error.message;
+      if (error.code === 'PGRST204') {
+        msg = "Erro de compatibilidade com o banco de dados (Coluna não encontrada).";
+      }
+
+      toast({ 
+        title: "Erro ao Salvar", 
+        description: msg || "Erro desconhecido.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -140,68 +177,100 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px] bg-background border border-border text-foreground shadow-lg">
         <DialogHeader>
-          <DialogTitle>{initialData ? 'Editar Recurso' : 'Adicionar Novo Recurso'}</DialogTitle>
-          {/* AQUI ESTÁ A CORREÇÃO DO AVISO: Adicionamos a Description */}
-          <DialogDescription>
-            Preencha os detalhes do material (Livro, Vídeo, Podcast ou Artigo) para adicionar à biblioteca.
+          <DialogTitle className="text-foreground">
+            {initialData ? 'Editar Item' : 'Adicionar à Biblioteca'}
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Adicione um Livro (PDF) ou um Podcast (Spotify).
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} className="space-y-6 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="title" className="text-foreground">Título do Material</Label>
+            <Input 
+                id="title" 
+                value={title} 
+                onChange={e => setTitle(e.target.value)} 
+                required 
+                placeholder={type === 'book_pdf' ? "Ex: Manual de Vendas" : "Ex: Episódio #42"}
+                className="bg-background border-input text-foreground"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Tipo</Label>
+              <Label className="text-foreground">Tipo</Label>
               <Select value={type} onValueChange={(v: any) => setType(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background border-input text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="book"><div className="flex items-center gap-2"><FileText className="w-4 h-4"/> Livro</div></SelectItem>
-                  <SelectItem value="video"><div className="flex items-center gap-2"><Video className="w-4 h-4"/> Vídeo</div></SelectItem>
-                  <SelectItem value="podcast"><div className="flex items-center gap-2"><Headphones className="w-4 h-4"/> Podcast</div></SelectItem>
-                  <SelectItem value="article"><div className="flex items-center gap-2"><LinkIcon className="w-4 h-4"/> Artigo</div></SelectItem>
+                <SelectContent className="bg-background border-border text-foreground">
+                  <SelectItem value="book_pdf"><div className="flex items-center gap-2"><FileText className="w-4 h-4"/> Livro (PDF)</div></SelectItem>
+                  <SelectItem value="podcast_audio"><div className="flex items-center gap-2"><Headphones className="w-4 h-4"/> Podcast</div></SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <div className="space-y-2">
-              <Label>Capa</Label>
-              <Input type="file" accept="image/*" onChange={handleImageChange} />
+              <Label className="text-foreground">Capa</Label>
+              <div className="flex gap-2 items-center">
+                {coverPreview ? (
+                  <img src={coverPreview} alt="Preview" className="h-9 w-9 object-cover rounded border border-border" />
+                ) : (
+                  <div className="h-9 w-9 bg-muted rounded border border-border flex items-center justify-center"><ImageIcon className="w-4 h-4 opacity-50"/></div>
+                )}
+                <Input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageChange} 
+                  className="text-sm h-9 px-2 py-1 bg-background border-input text-foreground file:text-foreground" 
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="title">Título *</Label>
-            <Input id="title" value={title} onChange={e => setTitle(e.target.value)} required />
-          </div>
+          {type === 'book_pdf' ? (
+            <div className="space-y-2 bg-muted/20 p-4 rounded-lg border border-dashed border-border">
+                <Label htmlFor="pdf_file" className="flex items-center gap-2 mb-2 font-semibold text-primary">
+                    <Upload className="w-4 h-4" /> Selecionar PDF
+                </Label>
+                <Input 
+                    id="pdf_file" 
+                    type="file" 
+                    accept=".pdf" 
+                    onChange={(e) => setBookFile(e.target.files?.[0] || null)}
+                    className="cursor-pointer bg-background border-input text-foreground file:text-foreground" 
+                />
+                {initialData?.url && !bookFile && (
+                    <p className="text-xs text-muted-foreground mt-2 truncate px-1">
+                        PDF Atual: <a href={initialData.url} target="_blank" rel="noreferrer" className="underline hover:text-primary">Visualizar</a>
+                    </p>
+                )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+                <Label htmlFor="url" className="flex items-center gap-2 text-foreground">
+                    <LinkIcon className="w-4 h-4" /> Link do Spotify
+                </Label>
+                <Input 
+                    id="url" 
+                    value={url} 
+                    onChange={e => setUrl(e.target.value)} 
+                    placeholder="http://googleusercontent.com/spotify.com/3..." 
+                    required 
+                    className="bg-background border-input text-foreground"
+                />
+            </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="url">Link / URL *</Label>
-            <Input id="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." required />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-             <div className="space-y-2">
-               <Label htmlFor="author">Autor/Criador</Label>
-               <Input id="author" value={author} onChange={e => setAuthor(e.target.value)} />
-             </div>
-             <div className="space-y-2">
-               <Label htmlFor="duration">Duração/Páginas</Label>
-               <Input id="duration" value={duration} onChange={e => setDuration(e.target.value)} placeholder="Ex: 1h 30m ou 200 pág" />
-             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="desc">Descrição</Label>
-            <Textarea id="desc" value={description} onChange={e => setDescription(e.target.value)} rows={3} />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}
+          <DialogFooter className="pt-4">
+            <Button type="button" variant="ghost" onClick={onClose} className="text-muted-foreground hover:text-foreground">Cancelar</Button>
+            <Button type="submit" disabled={isLoading} variant="netflix" className="w-full sm:w-auto">
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+              {isLoading ? 'Salvando...' : 'Salvar Conteúdo'}
             </Button>
           </DialogFooter>
         </form>
