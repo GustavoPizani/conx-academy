@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Eye, EyeOff, Loader2, Lock, Mail, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Loader2, Lock, Mail, ArrowRight, CheckCircle, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -19,52 +18,60 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-const Login = () => {
+const Login: React.FC = () => {
+  // --- Estados do Login ---
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
   
-  // Estados para o Primeiro Acesso
+  // --- Estados do Primeiro Acesso ---
   const [firstAccessEmail, setFirstAccessEmail] = useState('');
   const [firstAccessLoading, setFirstAccessLoading] = useState(false);
   const [firstAccessSent, setFirstAccessSent] = useState(false);
   const [isFirstAccessOpen, setIsFirstAccessOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { signIn } = useAuth();
+  const { login, user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // --- Lógica de Redirecionamento ---
+  useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/');
+    }
+  }, [user, authLoading, navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      toast({
-        variant: "destructive",
-        title: "Campos obrigatórios",
-        description: "Por favor, preencha e-mail e senha.",
-      });
-      return;
-    }
+    if (!email.trim() || !password.trim()) return;
 
     try {
-      setLoading(true);
-      await signIn(email, password);
-      navigate('/');
-    } catch (error: any) {
-      console.error(error);
-      let msg = "Verifique suas credenciais e tente novamente.";
-      if (error.message.includes("Invalid login")) msg = "E-mail ou senha incorretos.";
+      setLocalLoading(true);
+      const result = await login(email.trim(), password);
       
+      if (result.success) {
+        toast({ title: 'Bem-vindo!', description: 'Login realizado com sucesso.' });
+        // O useEffect cuida do redirecionamento
+      } else {
+        throw new Error(result.error || "Falha ao entrar");
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      let msg = error.message;
+      if (msg.includes("Invalid login")) msg = "E-mail ou senha incorretos.";
+
       toast({
-        variant: "destructive",
-        title: "Erro ao entrar",
+        title: 'Erro no login',
         description: msg,
+        variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
   };
 
+  // --- Lógica do Primeiro Acesso (Nova) ---
   const handleFirstAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -78,41 +85,34 @@ const Login = () => {
     try {
         const emailToCheck = firstAccessEmail.trim().toLowerCase();
 
-        // 1. VERIFICAÇÃO: O usuário existe no banco?
-        // Chama a função RPC que criamos no SQL
+        // 1. Verifica se o usuário existe (RPC)
         const { data: exists, error: rpcError } = await supabase.rpc('check_user_exists', { 
             email_check: emailToCheck 
         });
 
         if (rpcError) throw rpcError;
 
-        // 2. SE NÃO EXISTIR: Mostra erro e manda procurar o RH
         if (!exists) {
             setErrorMessage("Seu e-mail não foi cadastrado. Favor chamar o RH para realizar o cadastro.");
             setFirstAccessLoading(false);
             return;
         }
 
-        // 3. SE EXISTIR: Envia o link de definição de senha
-        // Remove a barra final da URL se houver (segurança de formatação)
+        // 2. Envia Link de Senha
         const origin = window.location.origin.replace(/\/$/, '');
-        
         const { error } = await supabase.auth.resetPasswordForEmail(emailToCheck, {
-            redirectTo: `${origin}/change-password`, // Redireciona para a tela certa
+            redirectTo: `${origin}/change-password`,
         });
 
         if (error) {
-            // Se der erro de rate limit aqui, avisamos o usuário
-            if (error.message.includes("Rate limit")) {
-                throw new Error("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
-            }
-            throw error;
+             if (error.message.includes("Rate limit")) throw new Error("Muitas tentativas. Aguarde um pouco.");
+             throw error;
         }
 
         setFirstAccessSent(true);
         toast({
             title: "Link Enviado!",
-            description: "Verifique seu e-mail para criar sua senha.",
+            description: "Verifique seu e-mail para criar a senha.",
             className: "bg-green-600 text-white border-none"
         });
 
@@ -121,7 +121,7 @@ const Login = () => {
         toast({
             variant: "destructive",
             title: "Erro",
-            description: error.message || "Não foi possível enviar o link.",
+            description: error.message || "Falha ao enviar link.",
         });
     } finally {
         setFirstAccessLoading(false);
@@ -135,97 +135,148 @@ const Login = () => {
       setIsFirstAccessOpen(false);
   }
 
+  // Spinner Inicial
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#141414] bg-[url('/Conxlogologin.png')] bg-cover bg-center bg-no-repeat relative">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-0"></div>
-      
-      <div className="w-full max-w-md px-4 z-10 animate-in fade-in zoom-in duration-500">
-        <div className="mb-8 text-center">
-            <img src="/logosidebar.png" alt="Logo" className="h-16 mx-auto mb-4 drop-shadow-lg" />
-            <h1 className="text-3xl font-bold text-white tracking-tight">Conx Academy</h1>
-            <p className="text-gray-400 mt-2">Plataforma de Treinamento Corporativo</p>
+    <div className="min-h-screen bg-background flex">
+      {/* LADO ESQUERDO - BRANDING (Visual Original Restaurado) */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        {/* Gradiente de Fundo */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-background" />
+        
+        {/* Padrão de Bolinhas (Pattern) */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZjY2MDAiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-40" />
+        
+        {/* Conteúdo da Marca */}
+        <div className="relative z-10 flex flex-col justify-center px-12 xl:px-20">
+          <div className="mb-8">
+            <div>
+              <img src="/Conxlogologin.png" alt="Conx" className="h-10 w-auto object-contain mt-1" />
+              <h2 className="font-display text-5xl tracking-wider text-foreground mt-2">ACADEMY</h2>
+            </div>
+          </div>
+          
+          <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
+            Plataforma oficial de treinamento e aprendizado da CONX Vendas pra corretores.
+            Aprenda, conquiste pontos e suba no ranking.
+          </p>
         </div>
+      </div>
 
-        <Card className="bg-black/80 border-white/10 text-white backdrop-blur-md shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-xl">Acessar Plataforma</CardTitle>
-            <CardDescription className="text-gray-400">Entre com suas credenciais corporativas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="nome@empresa.com"
-                    className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-red-600 focus:ring-red-600"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Senha</Label>
-                  <Button 
-                    variant="link" 
-                    className="p-0 h-auto text-xs text-gray-400 hover:text-white"
-                    type="button"
-                    onClick={() => navigate('/forgot-password')}
-                  >
-                    Esqueceu a senha?
-                  </Button>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-red-600 focus:ring-red-600"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-              </div>
-              <Button 
-                type="submit" 
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 transition-all duration-200"
-                disabled={loading}
-              >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Entrar"}
-              </Button>
-            </form>
+      {/* LADO DIREITO - FORMULÁRIO */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md">
+          {/* Logo Mobile */}
+          <div className="lg:hidden flex flex-col items-center justify-center mb-10">
+            <img src="/Conxlogologin.png" alt="Conx" className="h-8 w-auto object-contain" />
+          </div>
 
-            <div className="mt-6 pt-6 border-t border-white/10">
-                {/* MODAL DE PRIMEIRO ACESSO */}
-                <Dialog open={isFirstAccessOpen} onOpenChange={(open) => { setIsFirstAccessOpen(open); if(!open) setErrorMessage(null); }}>
+          <div className="text-center lg:text-left mb-8">
+            <h2 className="text-3xl font-bold text-foreground">Entrar</h2>
+            <p className="text-muted-foreground mt-2">
+              Acesse sua conta para continuar
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-foreground">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                className="h-12 bg-surface border-border focus:border-primary"
+                required
+                autoComplete="email" 
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-foreground">Senha</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="h-12 bg-surface border-border focus:border-primary pr-12"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              variant="netflix" // Usa o estilo laranja original
+              size="lg"
+              className="w-full"
+              disabled={localLoading}
+            >
+              {localLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Entrando...
+                </>
+              ) : (
+                'Entrar'
+              )}
+            </Button>
+          </form>
+
+          <div className="flex flex-col items-center gap-4 mt-8">
+            <p className="text-sm text-muted-foreground">
+              Esqueceu sua senha?{' '}
+              <Link to="/forgot-password" className="text-primary hover:underline font-medium">
+                Recuperar acesso
+              </Link>
+            </p>
+
+            {/* --- BOTÃO PRIMEIRO ACESSO (Inserido discretamente aqui) --- */}
+            <div className="w-full border-t border-border/50 pt-6">
+                 <Dialog open={isFirstAccessOpen} onOpenChange={(open) => { setIsFirstAccessOpen(open); if(!open) setErrorMessage(null); }}>
                     <DialogTrigger asChild>
                         <Button 
                             variant="outline" 
-                            className="w-full border-white/20 hover:bg-white/10 hover:text-white text-gray-300 transition-colors"
+                            className="w-full border-dashed border-primary/30 text-muted-foreground hover:text-primary hover:border-primary hover:bg-primary/5 transition-all"
                         >
-                            Primeiro Acesso? Defina sua senha
+                            Primeiro Acesso? Defina sua senha aqui
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-md bg-[#1e1e1e] border-white/10 text-white">
+                    
+                    {/* MODAL DE PRIMEIRO ACESSO (Conteúdo) */}
+                    <DialogContent className="sm:max-w-md bg-background border-border text-foreground">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
-                                <span className="bg-red-600/20 p-2 rounded-full text-red-500"><Lock className="w-5 h-5"/></span>
+                                <span className="bg-primary/10 p-2 rounded-full text-primary"><Lock className="w-5 h-5"/></span>
                                 Primeiro Acesso
                             </DialogTitle>
-                            <DialogDescription className="text-gray-400">
-                                Se você foi cadastrado recentemente pelo RH, insira seu e-mail para criar sua senha de acesso.
+                            <DialogDescription>
+                                Se você foi cadastrado recentemente pelo RH, insira seu e-mail para criar sua senha.
                             </DialogDescription>
                         </DialogHeader>
 
                         {!firstAccessSent ? (
                             <form onSubmit={handleFirstAccess} className="space-y-4 py-2">
                                 {errorMessage && (
-                                    <Alert variant="destructive" className="bg-red-900/20 border-red-900/50 text-red-200 animate-in fade-in slide-in-from-top-2">
+                                    <Alert variant="destructive" className="py-2">
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertTitle>Atenção</AlertTitle>
                                         <AlertDescription>{errorMessage}</AlertDescription>
@@ -235,11 +286,11 @@ const Login = () => {
                                 <div className="space-y-2">
                                     <Label htmlFor="fa-email">E-mail Corporativo</Label>
                                     <div className="relative">
-                                        <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                                        <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             id="fa-email"
                                             placeholder="seu.nome@conx.com.br"
-                                            className="pl-9 bg-black/20 border-white/10"
+                                            className="pl-9"
                                             value={firstAccessEmail}
                                             onChange={(e) => { setFirstAccessEmail(e.target.value); setErrorMessage(null); }}
                                             required
@@ -260,7 +311,7 @@ const Login = () => {
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-lg">E-mail Enviado!</h3>
-                                    <p className="text-sm text-gray-400 mt-2">
+                                    <p className="text-sm text-muted-foreground mt-2">
                                         Verifique a caixa de entrada de <strong>{firstAccessEmail}</strong>.<br/>
                                         Clique no link recebido para criar sua senha.
                                     </p>
@@ -273,11 +324,8 @@ const Login = () => {
                     </DialogContent>
                 </Dialog>
             </div>
-          </CardContent>
-          <CardFooter className="flex justify-center border-t border-white/5 pt-4">
-            <p className="text-xs text-gray-500">© 2024 Conx Academy. Todos os direitos reservados.</p>
-          </CardFooter>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
