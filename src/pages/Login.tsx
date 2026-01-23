@@ -38,8 +38,9 @@ const Login: React.FC = () => {
 
   // --- Lógica de Redirecionamento ---
   useEffect(() => {
+    // Se já estiver logado, manda para /home (igual ao seu original para evitar loop)
     if (user && !authLoading) {
-      navigate('/');
+      navigate('/home');
     }
   }, [user, authLoading, navigate]);
 
@@ -53,7 +54,7 @@ const Login: React.FC = () => {
       
       if (result.success) {
         toast({ title: 'Bem-vindo!', description: 'Login realizado com sucesso.' });
-        // O useEffect cuida do redirecionamento
+        // O useEffect acima vai cuidar de ir para /home
       } else {
         throw new Error(result.error || "Falha ao entrar");
       }
@@ -71,7 +72,7 @@ const Login: React.FC = () => {
     }
   };
 
-  // --- Lógica do Primeiro Acesso (Nova) ---
+  // --- Lógica do Primeiro Acesso (Discreta) ---
   const handleFirstAccess = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -135,7 +136,7 @@ const Login: React.FC = () => {
       setIsFirstAccessOpen(false);
   }
 
-  // Spinner Inicial
+  // Spinner Inicial (Só mostra se estiver checando sessão)
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
