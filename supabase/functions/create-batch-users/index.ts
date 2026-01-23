@@ -41,12 +41,12 @@ serve(async (req) => {
 
     // 3. Loop de Criação
     for (const user of users) {
-      // Verifica se já existe para economizar chamada (opcional, pois o invite trata isso, mas ajuda no relatório)
-      // Nota: inviteUserByEmail envia email de convite.
-      // Se quiser criar sem enviar email, use admin.createUser({ email, password, email_confirm: true })
-      
-      const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(user.email, {
-        data: {
+      // TENTA CRIAR SEM ENVIAR E-MAIL (Auto Confirmado)
+      // Isso burla o limite de emails/h do Supabase
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+        email: user.email,
+        email_confirm: true, // Já cria confirmado!
+        user_metadata: {
           name: user.name,
           role: user.role,
           team: user.team
@@ -55,9 +55,7 @@ serve(async (req) => {
 
       if (error) {
         console.error(`Erro ao criar ${user.email}:`, error)
-        // Se o erro for "User already registered", não é bem um erro, apenas ignoramos
         if (error.message.includes('already registered') || error.status === 422) {
-           // Opcional: Adicionar aos erros ou apenas ignorar
            results.errors.push(`${user.email}: Já cadastrado.`)
         } else {
            results.errors.push(`${user.email}: ${error.message}`)
