@@ -244,7 +244,7 @@ const CoursePlayer = () => {
                 {/* OVERLAY HACK */}
                 {showOverlay && (
                   <div className="absolute inset-0 z-50 bg-zinc-950 flex flex-col items-center justify-center animate-in fade-in duration-500">
-                    <img src="/Conxlogologin.png" alt="Conx Academy" className="w-48 mb-8 opacity-80" />
+                    <img src="/Conxlogologin.png" alt="Conx Vendas Academy" className="w-48 mb-8 opacity-80" />
                     <div className="flex flex-col gap-4 w-64">
                       {!isLastLesson ? (
                         <Button onClick={() => handleLessonChange(currentLessonIndex + 1)} className="bg-primary text-white">
