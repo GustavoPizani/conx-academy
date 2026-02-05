@@ -62,7 +62,7 @@ export const Sidebar: React.FC = () => {
       {/* Logo */}
       <Link to="/home" className="flex items-center h-16 px-4 border-b border-sidebar-border">
         <img
-          src="/logosidebar.png"
+          src={isExpanded ? "/logosidebar 2.png" : "/logosidebar.png"}
           alt="Conx Logo"
           className="h-10 w-auto object-contain"
         />

@@ -160,7 +160,7 @@ const Login: React.FC = () => {
           <div className="mb-8">
             <div>
               <img src="/Conxlogologin.png" alt="Conx" className="h-10 w-auto object-contain mt-1" />
-              <h2 className="font-display text-5xl tracking-wider text-foreground mt-2">ACADEMY</h2>
+              <h2 className="font-display text-[5.6rem] tracking-wider text-foreground">ACADEMY</h2>
             </div>
           </div>
           
