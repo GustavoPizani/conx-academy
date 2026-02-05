@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { ContentItem } from '@/components/shared/ContentCard';
+import { useUserRole } from '@/hooks/useUserRole';
 
 // A type for the featured course in the hero
 interface FeaturedCourse {
@@ -17,6 +18,7 @@ interface FeaturedCourse {
 
 const Home: React.FC = () => {
   const { user } = useAuth();
+  const { isAdmin, role } = useUserRole();
   const [featuredCourse, setFeaturedCourse] = useState<FeaturedCourse | null>(null);
   const [continueWatching, setContinueWatching] = useState<ContentItem[]>([]);
   const [watchAgain, setWatchAgain] = useState<ContentItem[]>([]);
@@ -31,6 +33,13 @@ const Home: React.FC = () => {
       }
       setIsLoading(true);
 
+      // Função auxiliar para filtrar cursos por role
+      const isCourseVisible = (course: any) => {
+        if (isAdmin()) return true;
+        const targetRoles = course.target_roles;
+        return Array.isArray(targetRoles) && targetRoles.includes(role);
+      };
+
       // Fetch new courses and set the featured one
       const { data: recentCoursesData, error: recentCoursesError } = await supabase
         .from('courses')
@@ -41,8 +50,11 @@ const Home: React.FC = () => {
       if (recentCoursesError) {
         console.error("Error fetching new courses:", recentCoursesError);
       } else if (recentCoursesData) {
+        // Filtrar cursos visíveis
+        const visibleRecentCourses = recentCoursesData.filter(isCourseVisible);
+
         // Set featured course (the newest one)
-        const heroCourse = recentCoursesData[0];
+        const heroCourse = visibleRecentCourses[0];
         if (heroCourse) {
           setFeaturedCourse({
             id: heroCourse.id,
@@ -54,7 +66,7 @@ const Home: React.FC = () => {
         }
 
         // Process for carousel
-        const processedNewCourses = recentCoursesData.map(course => ({
+        const processedNewCourses = visibleRecentCourses.map(course => ({
           id: course.id,
           title: course.title,
           thumbnail: course.cover_image,
@@ -93,7 +105,8 @@ const Home: React.FC = () => {
           }
         }
 
-        const coursesToDisplay = Array.from(courseMap.values());
+        // Filtrar cursos visíveis antes de processar o progresso
+        const coursesToDisplay = Array.from(courseMap.values()).filter(isCourseVisible);
 
         // Get completed lesson IDs
         const completedLessonIds = new Set(
@@ -133,7 +146,7 @@ const Home: React.FC = () => {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, isAdmin, role]);
 
   if (isLoading) {
     return (

@@ -52,7 +52,8 @@ export interface Course {
 const Courses: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin } = useUserRole();
+  // ALTERAÇÃO 1: Extraindo 'role' para usar na comparação
+  const { isAdmin, role } = useUserRole();
   const { user } = useAuth();
   const { isFavorite, toggleFavorite } = useFavorites();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -228,6 +229,33 @@ const Courses: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {courses.map((course) => {
+              // --- INÍCIO DO SCAN DE DIAGNÓSTICO ---
+              const userRole = role; // do hook useUserRole
+              const targetRoles = course.target_roles;
+              
+              console.group(`🔍 SCAN CURSO: ${course.title}`);
+              console.log("🆔 ID:", course.id);
+              console.log("👤 User Role:", userRole, `(Type: ${typeof userRole})`);
+              console.log("🎯 Target Roles (Raw):", targetRoles);
+              console.log("📊 Target Roles é Array?:", Array.isArray(targetRoles));
+              
+              // Teste de lógica manual
+              const isUserAdmin = userRole === 'admin';
+              const hasRole = Array.isArray(targetRoles) && targetRoles.includes(userRole as any);
+              
+              console.log("🔐 Verificação:");
+              console.log("   - É Admin?", isUserAdmin);
+              console.log("   - Role está na lista?", hasRole);
+              console.log("   - RESULTADO FINAL (Deve mostrar?):", isUserAdmin || hasRole);
+              console.groupEnd();
+              // --- FIM DO SCAN ---
+
+              // Lógica de Bloqueio
+              const canView = isUserAdmin || hasRole;
+              
+              // Se não puder ver, não renderiza o Card
+              if (!canView) return null;
+
               const isCompleted = course.progress === 100;
               return (
                 <Card
