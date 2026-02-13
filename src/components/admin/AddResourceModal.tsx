@@ -8,10 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-interface Resource {
+// Definição exata dos tipos aceitos
+export type ResourceType = 'book_pdf' | 'podcast_audio' | 'training_pdf';
+
+export interface Resource {
   id: string;
   title: string;
-  type: 'book_pdf' | 'podcast_audio' | 'training_pdf';
+  type: ResourceType;
   url: string;
   cover_image?: string;
 }
@@ -21,19 +24,16 @@ interface AddResourceModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialData?: Resource | null;
-  defaultType?: 'book_pdf' | 'podcast_audio' | 'training_pdf';
+  defaultType?: ResourceType;
 }
 
 const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSuccess, initialData, defaultType }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
-  // Estados do Formulário
   const [title, setTitle] = useState('');
-  const [type, setType] = useState<'book_pdf' | 'podcast_audio' | 'training_pdf'>('book_pdf');
+  const [type, setType] = useState<ResourceType>('book_pdf');
   const [url, setUrl] = useState(''); 
-  
-  // Estados de Upload
   const [coverImage, setCoverImage] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [bookFile, setBookFile] = useState<File | null>(null); 
@@ -42,7 +42,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
     if (open) {
       if (initialData) {
         setTitle(initialData.title || '');
-        setType(initialData.type || 'book_pdf');
+        setType(initialData.type as ResourceType); // Cast seguro
         setUrl(initialData.url || '');
         setCoverPreview(initialData.cover_image || null);
       } else {
@@ -61,19 +61,11 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
     const fileName = `${folder}/${Date.now()}_${sanitizedName}.${fileExt}`;
 
-    console.log(`Iniciando upload de ${folder}:`, fileName);
-
     const { error: uploadError } = await supabase.storage
       .from('library-files')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+      .upload(fileName, file, { cacheControl: '3600', upsert: false });
 
-    if (uploadError) {
-      console.error(`Erro detalhado upload ${folder}:`, uploadError);
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
     const { data } = supabase.storage.from('library-files').getPublicUrl(fileName);
     return data.publicUrl;
@@ -89,16 +81,17 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!title.trim()) {
       toast({ title: "Erro", description: "O título é obrigatório.", variant: "destructive" });
       return;
     }
 
+    // Validação para PDFs (Livros e Treinamentos)
     if ((type === 'book_pdf' || type === 'training_pdf') && !bookFile && !url.trim()) {
         toast({ title: "Erro", description: "Selecione um arquivo PDF.", variant: "destructive" });
         return;
     }
+    // Validação para Podcast
     if (type === 'podcast_audio' && !url.trim()) {
         toast({ title: "Erro", description: "O Link do Spotify é obrigatório.", variant: "destructive" });
         return;
@@ -109,34 +102,14 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
       let finalCoverUrl = initialData?.cover_image || null;
       let finalResourceUrl = url;
 
-      // 1. Upload da Capa
       if (coverImage) {
-        try {
-          finalCoverUrl = await uploadToStorage(coverImage, 'covers');
-        } catch (error: any) {
-          console.error("Erro capa:", error);
-          toast({ title: "Erro na Capa", description: "Falha ao subir imagem. Verifique permissões.", variant: "destructive" });
-        }
+        finalCoverUrl = await uploadToStorage(coverImage, 'covers');
       }
 
-      // 2. Upload do PDF
       if ((type === 'book_pdf' || type === 'training_pdf') && bookFile) {
-        try {
-          finalResourceUrl = await uploadToStorage(bookFile, 'pdfs');
-        } catch (error: any) {
-          console.error("Erro PDF:", error);
-          toast({ 
-            title: "Erro no Upload do PDF", 
-            description: "Falha ao subir arquivo. Verifique o console.", 
-            variant: "destructive" 
-          });
-          setIsLoading(false);
-          return;
-        }
+        finalResourceUrl = await uploadToStorage(bookFile, 'pdfs');
       }
 
-      // 3. Salvar no Banco
-      // CORREÇÃO: Removemos author, duration e description pois não existem no banco
       const payload = {
         title,
         type,
@@ -157,19 +130,8 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
       onClose();
 
     } catch (error: any) {
-      console.error("Erro ao salvar:", JSON.stringify(error, null, 2));
-      
-      // Tratamento de erro amigável
-      let msg = error.message;
-      if (error.code === 'PGRST204') {
-        msg = "Erro de compatibilidade com o banco de dados (Coluna não encontrada).";
-      }
-
-      toast({ 
-        title: "Erro ao Salvar", 
-        description: msg || "Erro desconhecido.", 
-        variant: "destructive" 
-      });
+      console.error("Erro ao salvar:", error);
+      toast({ title: "Erro ao Salvar", description: error.message || "Erro desconhecido.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -177,37 +139,24 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] bg-background border border-border text-foreground shadow-lg">
+      <DialogContent className="sm:max-w-[500px] bg-background border border-border text-foreground">
         <DialogHeader>
-          <DialogTitle className="text-foreground">
-            {initialData ? 'Editar Item' : 'Adicionar à Biblioteca'}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Adicione um Livro (PDF) ou um Podcast (Spotify).
-          </DialogDescription>
+          <DialogTitle>{initialData ? 'Editar Item' : 'Adicionar à Biblioteca'}</DialogTitle>
+          <DialogDescription>Adicione Treinamentos, Livros ou Podcasts.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="space-y-2">
-            <Label htmlFor="title" className="text-foreground">Título do Material</Label>
-            <Input 
-                id="title" 
-                value={title} 
-                onChange={e => setTitle(e.target.value)} 
-                required 
-                placeholder={type === 'podcast_audio' ? "Ex: Episódio #42" : "Ex: Manual de Vendas"}
-                className="bg-background border-input text-foreground"
-            />
+            <Label htmlFor="title">Título</Label>
+            <Input id="title" value={title} onChange={e => setTitle(e.target.value)} required placeholder="Ex: Manual de Vendas" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-foreground">Tipo</Label>
-              <Select value={type} onValueChange={(v: any) => setType(v)}>
-                <SelectTrigger className="bg-background border-input text-foreground">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background border-border text-foreground">
+              <Label>Tipo</Label>
+              <Select value={type} onValueChange={(v: ResourceType) => setType(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
                   <SelectItem value="training_pdf"><div className="flex items-center gap-2"><Presentation className="w-4 h-4"/> Treinamento (PDF)</div></SelectItem>
                   <SelectItem value="book_pdf"><div className="flex items-center gap-2"><FileText className="w-4 h-4"/> Livro (PDF)</div></SelectItem>
                   <SelectItem value="podcast_audio"><div className="flex items-center gap-2"><Headphones className="w-4 h-4"/> Podcast</div></SelectItem>
@@ -216,62 +165,40 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
             </div>
             
             <div className="space-y-2">
-              <Label className="text-foreground">Capa</Label>
+              <Label>Capa</Label>
               <div className="flex gap-2 items-center">
                 {coverPreview ? (
-                  <img src={coverPreview} alt="Preview" className="h-9 w-9 object-cover rounded border border-border" />
+                  <img src={coverPreview} alt="Preview" className="h-9 w-9 object-cover rounded border" />
                 ) : (
-                  <div className="h-9 w-9 bg-muted rounded border border-border flex items-center justify-center"><ImageIcon className="w-4 h-4 opacity-50"/></div>
+                  <div className="h-9 w-9 bg-muted rounded border flex items-center justify-center"><ImageIcon className="w-4 h-4 opacity-50"/></div>
                 )}
-                <Input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleImageChange} 
-                  className="text-sm h-9 px-2 py-1 bg-background border-input text-foreground file:text-foreground" 
-                />
+                <Input type="file" accept="image/*" onChange={handleImageChange} className="text-sm h-9 px-2 py-1" />
               </div>
             </div>
           </div>
 
           {(type === 'book_pdf' || type === 'training_pdf') ? (
-            <div className="space-y-2 bg-muted/20 p-4 rounded-lg border border-dashed border-border">
+            <div className="space-y-2 bg-muted/20 p-4 rounded-lg border border-dashed">
                 <Label htmlFor="pdf_file" className="flex items-center gap-2 mb-2 font-semibold text-primary">
                     <Upload className="w-4 h-4" /> Selecionar PDF
                 </Label>
-                <Input 
-                    id="pdf_file" 
-                    type="file" 
-                    accept=".pdf" 
-                    onChange={(e) => setBookFile(e.target.files?.[0] || null)}
-                    className="cursor-pointer bg-background border-input text-foreground file:text-foreground" 
-                />
+                <Input id="pdf_file" type="file" accept=".pdf" onChange={(e) => setBookFile(e.target.files?.[0] || null)} className="cursor-pointer" />
                 {initialData?.url && !bookFile && (
-                    <p className="text-xs text-muted-foreground mt-2 truncate px-1">
-                        PDF Atual: <a href={initialData.url} target="_blank" rel="noreferrer" className="underline hover:text-primary">Visualizar</a>
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-2 truncate px-1">PDF Atual: <a href={initialData.url} target="_blank" rel="noreferrer" className="underline">Visualizar</a></p>
                 )}
             </div>
           ) : (
             <div className="space-y-2">
-                <Label htmlFor="url" className="flex items-center gap-2 text-foreground">
-                    <LinkIcon className="w-4 h-4" /> Link do Spotify
-                </Label>
-                <Input 
-                    id="url" 
-                    value={url} 
-                    onChange={e => setUrl(e.target.value)} 
-                    placeholder="http://googleusercontent.com/spotify.com/3..." 
-                    required 
-                    className="bg-background border-input text-foreground"
-                />
+                <Label htmlFor="url" className="flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Link do Spotify</Label>
+                <Input id="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://open.spotify.com/..." required />
             </div>
           )}
 
-          <DialogFooter className="pt-4">
-            <Button type="button" variant="ghost" onClick={onClose} className="text-muted-foreground hover:text-foreground">Cancelar</Button>
-            <Button type="submit" disabled={isLoading} variant="netflix" className="w-full sm:w-auto">
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={isLoading} variant="netflix">
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
-              {isLoading ? 'Salvando...' : 'Salvar Conteúdo'}
+              {isLoading ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogFooter>
         </form>
