@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Upload, Link as LinkIcon, FileText, Headphones, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Upload, Link as LinkIcon, FileText, Headphones, Image as ImageIcon, Presentation } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 interface Resource {
   id: string;
   title: string;
-  type: 'book_pdf' | 'podcast_audio';
+  type: 'book_pdf' | 'podcast_audio' | 'training_pdf';
   url: string;
   cover_image?: string;
 }
@@ -21,7 +21,7 @@ interface AddResourceModalProps {
   onClose: () => void;
   onSuccess: () => void;
   initialData?: Resource | null;
-  defaultType?: 'book_pdf' | 'podcast_audio';
+  defaultType?: 'book_pdf' | 'podcast_audio' | 'training_pdf';
 }
 
 const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSuccess, initialData, defaultType }) => {
@@ -30,7 +30,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
   
   // Estados do Formulário
   const [title, setTitle] = useState('');
-  const [type, setType] = useState<'book_pdf' | 'podcast_audio'>('book_pdf');
+  const [type, setType] = useState<'book_pdf' | 'podcast_audio' | 'training_pdf'>('book_pdf');
   const [url, setUrl] = useState(''); 
   
   // Estados de Upload
@@ -95,7 +95,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
       return;
     }
 
-    if (type === 'book_pdf' && !bookFile && !url.trim()) {
+    if ((type === 'book_pdf' || type === 'training_pdf') && !bookFile && !url.trim()) {
         toast({ title: "Erro", description: "Selecione um arquivo PDF.", variant: "destructive" });
         return;
     }
@@ -120,7 +120,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
       }
 
       // 2. Upload do PDF
-      if (type === 'book_pdf' && bookFile) {
+      if ((type === 'book_pdf' || type === 'training_pdf') && bookFile) {
         try {
           finalResourceUrl = await uploadToStorage(bookFile, 'pdfs');
         } catch (error: any) {
@@ -195,7 +195,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
                 value={title} 
                 onChange={e => setTitle(e.target.value)} 
                 required 
-                placeholder={type === 'book_pdf' ? "Ex: Manual de Vendas" : "Ex: Episódio #42"}
+                placeholder={type === 'podcast_audio' ? "Ex: Episódio #42" : "Ex: Manual de Vendas"}
                 className="bg-background border-input text-foreground"
             />
           </div>
@@ -208,6 +208,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-background border-border text-foreground">
+                  <SelectItem value="training_pdf"><div className="flex items-center gap-2"><Presentation className="w-4 h-4"/> Treinamento (PDF)</div></SelectItem>
                   <SelectItem value="book_pdf"><div className="flex items-center gap-2"><FileText className="w-4 h-4"/> Livro (PDF)</div></SelectItem>
                   <SelectItem value="podcast_audio"><div className="flex items-center gap-2"><Headphones className="w-4 h-4"/> Podcast</div></SelectItem>
                 </SelectContent>
@@ -232,7 +233,7 @@ const AddResourceModal: React.FC<AddResourceModalProps> = ({ open, onClose, onSu
             </div>
           </div>
 
-          {type === 'book_pdf' ? (
+          {(type === 'book_pdf' || type === 'training_pdf') ? (
             <div className="space-y-2 bg-muted/20 p-4 rounded-lg border border-dashed border-border">
                 <Label htmlFor="pdf_file" className="flex items-center gap-2 mb-2 font-semibold text-primary">
                     <Upload className="w-4 h-4" /> Selecionar PDF
