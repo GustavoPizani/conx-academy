@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { usePoints } from '@/hooks/usePoints';
@@ -55,6 +57,14 @@ const Library: React.FC = () => {
   const [currentBook, setCurrentBook] = useState<{url: string, title: string, id: string, type: ResourceType} | null>(null);
 
   const [activeTab, setActiveTab] = useState('trainings');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const fetchResources = useCallback(async () => {
     try {
@@ -147,21 +157,54 @@ const Library: React.FC = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <TabsList className="bg-surface w-full sm:w-auto overflow-x-auto justify-start">
-              <TabsTrigger value="trainings" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Presentation className="w-4 h-4" /> Treinamentos
-              </TabsTrigger>
-              <TabsTrigger value="books" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <BookOpen className="w-4 h-4" /> Livros
-              </TabsTrigger>
-              <TabsTrigger value="podcasts" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Headphones className="w-4 h-4" /> Podcasts
-              </TabsTrigger>
-            </TabsList>
+            
+            {/* LÓGICA DE FILTRO RESPONSIVO */}
+            {isMobile ? (
+              <div className="w-full space-y-2">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-bold">
+                  Selecionar Categoria
+                </Label>
+                <Select value={activeTab} onValueChange={setActiveTab}>
+                  <SelectTrigger className="w-full bg-surface border-border h-12 text-base">
+                    <SelectValue placeholder="Categoria" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-surface border-border">
+                    <SelectItem value="trainings">
+                      <div className="flex items-center gap-2">
+                        <Presentation className="w-4 h-4 text-primary" /> Treinamentos
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="books">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-primary" /> Livros
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="podcasts">
+                      <div className="flex items-center gap-2">
+                        <Headphones className="w-4 h-4 text-primary" /> Podcasts
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <TabsList className="bg-surface w-full sm:w-auto overflow-x-auto justify-start">
+                <TabsTrigger value="trainings" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <Presentation className="w-4 h-4" /> Treinamentos
+                </TabsTrigger>
+                <TabsTrigger value="books" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <BookOpen className="w-4 h-4" /> Livros
+                </TabsTrigger>
+                <TabsTrigger value="podcasts" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <Headphones className="w-4 h-4" /> Podcasts
+                </TabsTrigger>
+              </TabsList>
+            )}
 
             {isAdmin() && (
               <Button 
                 variant="netflix" 
+                className={isMobile ? "w-full h-12" : ""}
                 onClick={() => {
                   if (activeTab === 'podcasts') handleAddClick('podcast_audio');
                   else if (activeTab === 'books') handleAddClick('book_pdf');
@@ -169,7 +212,7 @@ const Library: React.FC = () => {
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Adicionar Item
+                Adicionar {activeTab === 'podcasts' ? 'Podcast' : activeTab === 'books' ? 'Livro' : 'Treinamento'}
               </Button>
             )}
           </div>

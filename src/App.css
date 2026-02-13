@@ -40,3 +40,20 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Impede o scroll de "elástico" no topo e no fundo em apps instalados */
+html, body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none; /* Opcional: impede seleção de texto global para parecer app */
+}
+
+/* Garante que inputs e áreas de leitura permitam seleção */
+input, textarea, .select-text {
+  user-select: text;
+}
+
+/* Ajuste para o menu mobile não ficar colado no fundo de iPhones novos */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
