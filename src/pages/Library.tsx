@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BookOpen, Headphones, ExternalLink, Plus, Loader2, MoreVertical, Heart, Presentation } from 'lucide-react';
+import { BookOpen, Headphones, ExternalLink, Plus, Loader2, MoreVertical, Heart, Presentation, Book } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { usePoints } from '@/hooks/usePoints';
-import AddResourceModal, { ResourceType, Resource as IResource } from '@/components/admin/AddResourceModal';
+import AddResourceModal, { ResourceType } from '@/components/admin/AddResourceModal';
 import BookReader from '@/components/library/BookReader';
 import { useFavorites } from '@/hooks/useFavorites';
 import {
@@ -28,11 +28,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-// Reutilizamos a interface ou definimos localmente
 interface Resource {
   id: string;
   title: string;
-  type: ResourceType; // Usa o tipo exportado do Modal
+  type: ResourceType;
   url: string;
   cover_image: string | null;
 }
@@ -44,21 +43,17 @@ const Library: React.FC = () => {
   const { awardResourceAccess } = usePoints();
   const { isFavorite, toggleFavorite } = useFavorites();
   
-  // ESTADOS
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Modais e Diálogos
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModalType, setAddModalType] = useState<ResourceType>('training_pdf');
   const [resourceToDelete, setResourceToDelete] = useState<string | null>(null);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   
-  // Leitor
   const [readerOpen, setReaderOpen] = useState(false);
-  const [currentBook, setCurrentBook] = useState<{url: string, title: string} | null>(null);
+  const [currentBook, setCurrentBook] = useState<{url: string, title: string, id: string, type: ResourceType} | null>(null);
 
-  // Aba Ativa (Padrão: trainings)
   const [activeTab, setActiveTab] = useState('trainings');
 
   const fetchResources = useCallback(async () => {
@@ -91,9 +86,16 @@ const Library: React.FC = () => {
     await awardResourceAccess(resource.id, resource.type);
     await supabase.from('resource_logs').insert({ user_id: user.id, resource_id: resource.id });
     
-    // Treinamentos e Livros abrem o Leitor PDF
-    if (resource.type === 'book_pdf' || resource.type === 'training_pdf') {
-      setCurrentBook({ url: resource.url, title: resource.title });
+    // Lista de tipos que abrem no Leitor Interno (PDF e EPUB)
+    const readerTypes = ['book_pdf', 'training_pdf', 'ebook_epub'];
+
+    if (readerTypes.includes(resource.type)) {
+      setCurrentBook({ 
+        url: resource.url, 
+        title: resource.title, 
+        id: resource.id,
+        type: resource.type 
+      });
       setReaderOpen(true);
     } else {
       toast({ title: 'Abrindo...', description: 'Redirecionando para o conteúdo.' });
@@ -125,9 +127,10 @@ const Library: React.FC = () => {
     setShowAddModal(true);
   };
 
-  // --- FILTROS DE SEÇÃO ---
+  // Filtros
   const trainings = resources.filter(r => r.type === 'training_pdf');
-  const books = resources.filter(r => r.type === 'book_pdf');
+  // Livros incluem PDFs e ePubs
+  const books = resources.filter(r => ['book_pdf', 'ebook_epub'].includes(r.type));
   const podcasts = resources.filter(r => r.type === 'podcast_audio');
 
   const defaultCover = 'https://images.unsplash.com/photo-1557683316-973673baf926?w=400&q=80';
@@ -145,7 +148,6 @@ const Library: React.FC = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <TabsList className="bg-surface w-full sm:w-auto overflow-x-auto justify-start">
-              {/* NOVA ABA: TREINAMENTOS */}
               <TabsTrigger value="trainings" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Presentation className="w-4 h-4" /> Treinamentos
               </TabsTrigger>
@@ -167,7 +169,7 @@ const Library: React.FC = () => {
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Adicionar {activeTab === 'podcasts' ? 'Podcast' : activeTab === 'books' ? 'Livro' : 'Treinamento'}
+                Adicionar Item
               </Button>
             )}
           </div>
@@ -176,62 +178,51 @@ const Library: React.FC = () => {
             <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
           ) : (
             <>
-              {/* CONTEÚDO TREINAMENTOS */}
+              {/* TREINAMENTOS */}
               <TabsContent value="trainings">
                 {trainings.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    <Presentation className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>Nenhum treinamento disponível.</p>
-                  </div>
+                  <div className="text-center py-20 text-muted-foreground">Nenhum treinamento disponível.</div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {trainings.map((item) => (
                       <Card key={item.id} onClick={() => handleResourceClick(item)} className="bg-card border-border group cursor-pointer hover:scale-[1.02] transition-all">
                         <div className="relative aspect-[2/3] overflow-hidden">
-                          <img src={item.cover_image || defaultCover} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                          <img src={item.cover_image || defaultCover} alt={item.title} className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                          
-                          {/* Botões de Ação */}
-                          <div className="absolute top-2 right-2 flex gap-1 z-20">
-                             <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/50 text-white hover:bg-black/70 rounded-full" onClick={(e) => { e.stopPropagation(); toggleFavorite('resource', item.id); }}>
-                               <Heart className={`w-4 h-4 ${isFavorite('resource', item.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                             </Button>
-                             {isAdmin() && (
-                               <DropdownMenu>
-                                 <DropdownMenuTrigger asChild>
-                                   <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/50 text-white hover:bg-black/70 rounded-full"><MoreVertical className="w-4 h-4" /></Button>
-                                 </DropdownMenuTrigger>
-                                 <DropdownMenuContent>
-                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditResource(item); }}>Editar</DropdownMenuItem>
-                                   <DropdownMenuItem className="text-red-500" onClick={(e) => { e.stopPropagation(); setResourceToDelete(item.id); }}>Excluir</DropdownMenuItem>
-                                 </DropdownMenuContent>
-                               </DropdownMenu>
-                             )}
-                          </div>
+                          {isAdmin() && (
+                             <div className="absolute top-2 right-2 z-20">
+                               <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/50 text-white rounded-full" onClick={(e) => { e.stopPropagation(); handleEditResource(item); }}>
+                                 <MoreVertical className="w-4 h-4" />
+                               </Button>
+                             </div>
+                          )}
                         </div>
-                        <CardContent className="p-3">
-                          <h3 className="font-medium line-clamp-2 text-sm">{item.title}</h3>
-                        </CardContent>
+                        <CardContent className="p-3"><h3 className="font-medium line-clamp-2 text-sm">{item.title}</h3></CardContent>
                       </Card>
                     ))}
                   </div>
                 )}
               </TabsContent>
 
-              {/* CONTEÚDO LIVROS */}
+              {/* LIVROS */}
               <TabsContent value="books">
                 {books.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    <BookOpen className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>Nenhum livro disponível.</p>
-                  </div>
+                  <div className="text-center py-20 text-muted-foreground">Nenhum livro disponível.</div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {books.map((book) => (
                       <Card key={book.id} onClick={() => handleResourceClick(book)} className="bg-card border-border group cursor-pointer hover:scale-[1.02] transition-all">
                         <div className="relative aspect-[2/3] overflow-hidden">
-                          <img src={book.cover_image || defaultCover} alt={book.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                          <img src={book.cover_image || defaultCover} alt={book.title} className="w-full h-full object-cover" />
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
+                          
+                          {/* Badge de ePub */}
+                          {book.type === 'ebook_epub' && (
+                            <div className="absolute top-2 left-2 bg-primary text-white text-[10px] px-1.5 py-0.5 rounded font-bold shadow-sm">
+                              ePUB
+                            </div>
+                          )}
+
                           <div className="absolute top-2 right-2 flex gap-1 z-20">
                              <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/50 text-white hover:bg-black/70 rounded-full" onClick={(e) => { e.stopPropagation(); toggleFavorite('resource', book.id); }}>
                                <Heart className={`w-4 h-4 ${isFavorite('resource', book.id) ? 'fill-red-500 text-red-500' : ''}`} />
@@ -256,36 +247,16 @@ const Library: React.FC = () => {
                 )}
               </TabsContent>
 
-              {/* CONTEÚDO PODCASTS */}
+              {/* PODCASTS */}
               <TabsContent value="podcasts">
                 {podcasts.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">
-                    <Headphones className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p>Nenhum podcast disponível.</p>
-                  </div>
+                  <div className="text-center py-20 text-muted-foreground">Nenhum podcast disponível.</div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {podcasts.map((podcast) => (
-                      <Card key={podcast.id} onClick={() => handleResourceClick(podcast)} className="bg-card border-border group cursor-pointer hover:scale-[1.02] transition-all">
+                      <Card key={podcast.id} onClick={() => handleResourceClick(podcast)} className="bg-card border-border group cursor-pointer hover:scale-[1.02]">
                         <div className="relative aspect-square overflow-hidden">
-                          <img src={podcast.cover_image || defaultCover} alt={podcast.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                          <div className="absolute top-2 right-2 flex gap-1 z-20">
-                             <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/50 text-white hover:bg-black/70 rounded-full" onClick={(e) => { e.stopPropagation(); toggleFavorite('resource', podcast.id); }}>
-                               <Heart className={`w-4 h-4 ${isFavorite('resource', podcast.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                             </Button>
-                             {isAdmin() && (
-                               <DropdownMenu>
-                                 <DropdownMenuTrigger asChild>
-                                   <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/50 text-white hover:bg-black/70 rounded-full"><MoreVertical className="w-4 h-4" /></Button>
-                                 </DropdownMenuTrigger>
-                                 <DropdownMenuContent>
-                                   <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditResource(podcast); }}>Editar</DropdownMenuItem>
-                                   <DropdownMenuItem className="text-red-500" onClick={(e) => { e.stopPropagation(); setResourceToDelete(podcast.id); }}>Excluir</DropdownMenuItem>
-                                 </DropdownMenuContent>
-                               </DropdownMenu>
-                             )}
-                          </div>
+                          <img src={podcast.cover_image || defaultCover} alt={podcast.title} className="w-full h-full object-cover" />
                         </div>
                         <CardContent className="p-3"><h3 className="font-medium line-clamp-2 text-sm">{podcast.title}</h3></CardContent>
                       </Card>
@@ -308,7 +279,7 @@ const Library: React.FC = () => {
 
       <AlertDialog open={!!resourceToDelete} onOpenChange={() => setResourceToDelete(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle><AlertDialogDescription>Esta ação é irreversível.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Excluir?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction className="bg-red-600" onClick={handleDeleteResource}>Excluir</AlertDialogAction>
@@ -320,8 +291,10 @@ const Library: React.FC = () => {
         <BookReader 
           isOpen={readerOpen} 
           onClose={() => setReaderOpen(false)} 
-          pdfUrl={currentBook.url} 
-          title={currentBook.title} 
+          url={currentBook.url} 
+          title={currentBook.title}
+          resourceId={currentBook.id}
+          type={currentBook.type} // Passando o tipo para decidir entre PDF e ePUB
         />
       )}
     </div>
