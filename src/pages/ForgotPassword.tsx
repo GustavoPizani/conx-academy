@@ -22,7 +22,7 @@ const ForgotPassword = () => {
       // Envia o e-mail de recuperação
       // O 'redirectTo' aponta para sua página de alterar senha existente
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/change-password`,
+        redirectTo: 'https://academy.conxvendas.com.br/change-password',
       });
 
       if (error) throw error;
