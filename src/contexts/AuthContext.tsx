@@ -62,8 +62,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     initAuth();
 
-    // 2. Listener para eventos futuros
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. Listener para eventos futuros (A MÁGICA ACONTECE AQUI)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      
+      // --- O NOSSO ESPIÃO ---
+      // Se o usuário clicou no link do e-mail (seja do seu app ou do painel do Supabase)
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log("Evento de recuperação detectado! Redirecionando...");
+        window.location.href = '/change-password';
+        return; // Interrompe a função aqui
+      }
+      // -----------------------
+
       if (mounted) {
         setSession(session);
         setUser(session?.user ?? null);
